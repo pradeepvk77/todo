@@ -2,6 +2,7 @@ import { neon } from "@neondatabase/serverless";
 
 export interface Todo {
   id: number;
+  user_id: string;
   title: string;
   completed: boolean;
   task_type: "time" | "checkbox" | "input" | "number";
@@ -21,6 +22,7 @@ export async function initDb() {
   await sql`
     CREATE TABLE IF NOT EXISTS todos (
       id         SERIAL PRIMARY KEY,
+      user_id    TEXT    DEFAULT 'user1',
       title      TEXT    NOT NULL,
       completed  BOOLEAN DEFAULT FALSE,
       task_type  TEXT    DEFAULT 'checkbox',
@@ -28,5 +30,8 @@ export async function initDb() {
       sort_order INTEGER DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
+  `;
+  await sql`
+    ALTER TABLE todos ADD COLUMN IF NOT EXISTS user_id TEXT DEFAULT 'user1'
   `;
 }

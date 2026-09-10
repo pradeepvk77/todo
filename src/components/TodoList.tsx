@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Todo } from "@/lib/db";
 import { toggleTodo, deleteTodo, updateTaskOrder } from "@/app/actions";
 import { TaskWidget } from "@/components/TaskWidget";
@@ -21,13 +21,15 @@ interface TodoListProps {
 
 export function TodoList({ initialTodos }: TodoListProps) {
   const [todos, setTodos] = useState<Todo[]>(initialTodos);
+  const [prevInitialTodos, setPrevInitialTodos] = useState<Todo[]>(initialTodos);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [, startTransition] = useTransition();
 
-  useEffect(() => {
+  if (initialTodos !== prevInitialTodos) {
+    setPrevInitialTodos(initialTodos);
     setTodos(initialTodos);
-  }, [initialTodos]);
+  }
 
   const handleToggle = (id: number, currentCompleted: boolean) => {
     setTogglingId(id);

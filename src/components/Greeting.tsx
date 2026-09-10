@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import { Calendar, CheckSquare } from "lucide-react";
 
 function getGreeting(hour: number) {
@@ -9,24 +9,34 @@ function getGreeting(hour: number) {
   return { text: "Good Evening", emoji: "🌙" };
 }
 
-export function Greeting() {
-  // Start with null to avoid SSR/client mismatch (hydration)
-  const [greeting, setGreeting] = useState<{ text: string; emoji: string } | null>(null);
-  const [formattedDate, setFormattedDate] = useState<string>("");
+const emptySubscribe = () => () => {};
 
-  useEffect(() => {
-    // Runs only in the browser — always uses the user's local timezone
-    const now = new Date();
-    setGreeting(getGreeting(now.getHours()));
-    setFormattedDate(
-      now.toLocaleDateString("en-US", {
-        weekday: "long",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    );
-  }, []);
+function getClientTimeData() {
+  const now = new Date();
+  return {
+    greeting: getGreeting(now.getHours()),
+    formattedDate: now.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+  };
+}
+
+interface GreetingProps {
+  userName?: string;
+}
+
+export function Greeting({ userName }: GreetingProps) {
+  const isMounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+
+  const timeData = isMounted ? getClientTimeData() : null;
+  const displayName = userName ? `, ${userName}` : "";
 
   return (
     <div className="flex items-center gap-3">
@@ -35,12 +45,11 @@ export function Greeting() {
       </div>
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-          {/* Show a neutral placeholder during SSR / before hydration */}
-          {greeting ? `${greeting.text} ${greeting.emoji}` : "Hello 👋"}
+          {timeData ? `${timeData.greeting.text}${displayName} ${timeData.greeting.emoji}` : `Hello${displayName} 👋`}
         </h1>
         <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground mt-1">
           <Calendar className="w-3.5 h-3.5" />
-          <span>{formattedDate}</span>
+          <span>{timeData?.formattedDate ?? ""}</span>
         </div>
       </div>
     </div>

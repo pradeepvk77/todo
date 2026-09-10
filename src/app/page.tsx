@@ -1,76 +1,107 @@
-import { getTodos } from "@/app/actions";
+import { getTodos, getOtherUserTodos } from "@/app/actions";
+import { getSession } from "@/lib/session";
+import { redirect } from "next/navigation";
 import { TodoList } from "@/components/TodoList";
+import { YouTodoList } from "@/components/YouTodoList";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { Greeting } from "@/components/Greeting";
-import { User, Users, Heart } from "lucide-react";
+import { logoutAction } from "@/app/actions/auth";
+import { User, Users, LogOut, Shield } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export const revalidate = 0;
 
-
-
 export default async function Home() {
-  const todos = await getTodos();
+  const session = await getSession();
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  const currentUserId = session.userId;
+  const currentUserName = currentUserId === "user1" ? "User 1" : "User 2";
+  const otherUserName = currentUserId === "user1" ? "User 2" : "User 1";
+
+  const [myTodos, otherData] = await Promise.all([
+    getTodos(),
+    getOtherUserTodos(),
+  ]);
 
   return (
     <main className="min-h-screen py-10 px-4 sm:px-6 w-full max-w-xl mx-auto">
-      {/* Top Header with Greeting & Date */}
-      <header className="mb-8 pb-6 border-b border-border w-full">
-        <Greeting />
+      {/* Top Header with Greeting, Session Badge & Logout */}
+      <header className="mb-8 pb-6 border-b border-border w-full space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <Greeting userName={currentUserName} />
+          
+          <form action={logoutAction}>
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer transition-colors"
+              title="Logout session"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
+            </Button>
+          </form>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 py-1.5 px-3 rounded-md w-fit border border-border/50">
+          <Shield className="w-3.5 h-3.5 text-emerald-500" />
+          <span>Authenticated as <strong className="text-foreground font-semibold">{currentUserName}</strong></span>
+        </div>
       </header>
 
       {/* Main Tabs Navigation (Me / You) */}
       <Tabs defaultValue="me" className="w-full">
-        {/* Tab bar — flex-1 on each trigger gives equal 50/50 split */}
+        {/* Tab bar — 50/50 split */}
         <TabsList className="w-full">
-          <TabsTrigger value="me">
+          <TabsTrigger value="me" className="flex-1">
             <User className="w-4 h-4" />
-            <span>Me</span>
+            <span>Me ({currentUserName})</span>
           </TabsTrigger>
 
-          <TabsTrigger value="you">
+          <TabsTrigger value="you" className="flex-1">
             <Users className="w-4 h-4" />
-            <span>You</span>
+            <span>You ({otherUserName})</span>
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab 1: Me */}
+        {/* Tab 1: Me (Authenticated User's Data) */}
         <TabsContent value="me" className="w-full space-y-6 focus-visible:outline-none">
-          {/* Title Header with Add Task Dialog Button on Right */}
           <div className="flex items-center justify-between pb-2 w-full">
             <div>
               <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
-                Today we have
+                My Tasks
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {todos.length} {todos.length === 1 ? "task" : "tasks"} scheduled for today
+                {myTodos.length} {myTodos.length === 1 ? "task" : "tasks"} scheduled for today
               </p>
             </div>
 
-            {/* Add Task Modal Trigger */}
             <AddTaskDialog />
           </div>
 
-          {/* Interactive Drag & Drop Task List */}
-          <TodoList initialTodos={todos} />
+          <TodoList initialTodos={myTodos} />
         </TabsContent>
 
-        {/* Tab 2: You (Coming Soon) */}
-        <TabsContent value="you" className="w-full focus-visible:outline-none">
-          <Card className="w-full border border-border bg-card p-8 text-center shadow-xs rounded-xl">
-            <CardContent className="space-y-3 pt-4">
-              <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto text-muted-foreground border border-border">
-                <Heart className="w-6 h-6 text-destructive animate-pulse" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-card-foreground">Coming Soon</h3>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1 max-w-sm mx-auto leading-relaxed">
-                  The <strong className="text-foreground font-medium">You</strong> tab will allow shared partner task tracking, collaborative daily routines, and mutual goal reporting.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Tab 2: You (Other User's Data) */}
+        <TabsContent value="you" className="w-full space-y-6 focus-visible:outline-none">
+          <div className="flex items-center justify-between pb-2 w-full">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+                {`${otherUserName}'s Tasks`}
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {otherData.todos.length} {otherData.todos.length === 1 ? "task" : "tasks"} scheduled
+              </p>
+            </div>
+          </div>
+
+          <YouTodoList todos={otherData.todos} otherUserLabel={otherUserName} />
         </TabsContent>
       </Tabs>
     </main>
