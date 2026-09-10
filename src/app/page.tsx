@@ -1,53 +1,23 @@
 import { getTodos } from "@/app/actions";
 import { TodoList } from "@/components/TodoList";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
-import { Calendar, User, Users, Heart, CheckSquare } from "lucide-react";
+import { Greeting } from "@/components/Greeting";
+import { User, Users, Heart } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const revalidate = 0;
 
-function getGreeting(hour: number) {
-  if (hour >= 5 && hour < 12) {
-    return { text: "Good Morning", emoji: "☀️" };
-  } else if (hour >= 12 && hour < 17) {
-    return { text: "Good Afternoon", emoji: "🌤️" };
-  } else {
-    return { text: "Good Evening", emoji: "🌙" };
-  }
-}
+
 
 export default async function Home() {
   const todos = await getTodos();
-
-  const now = new Date();
-  const greeting = getGreeting(now.getHours());
-
-  const formattedDate = now.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 
   return (
     <main className="min-h-screen py-10 px-4 sm:px-6 w-full max-w-xl mx-auto">
       {/* Top Header with Greeting & Date */}
       <header className="mb-8 pb-6 border-b border-border w-full">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-primary text-primary-foreground rounded-lg shadow-xs flex-shrink-0">
-            <CheckSquare className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              {greeting.text} {greeting.emoji}
-            </h1>
-            <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground mt-1">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>{formattedDate}</span>
-            </div>
-          </div>
-        </div>
+        <Greeting />
       </header>
 
       {/* Main Tabs Navigation (Me / You) */}
