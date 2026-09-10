@@ -2,11 +2,11 @@
 
 ## 📌 Executive Summary
 
-**Project Name**: TaskFlow SQLite Todo Application  
+**Project Name**: TaskFlow Todo Application  
 **Target Environment**: Node.js v22+  
-**Core Technologies**: Next.js 16 (App Router), TypeScript, Tailwind CSS v4, SQLite (`better-sqlite3`), Lucide Icons.
+**Core Technologies**: Next.js 16 (App Router), TypeScript, Tailwind CSS v4, Neon PostgreSQL (`@neondatabase/serverless`), Lucide Icons.
 
-TaskFlow is a full-stack, lightweight Todo application designed to demonstrate native, zero-config SQLite integration inside Next.js App Router using React Server Components and Server Actions.
+TaskFlow is a full-stack Todo application using a serverless Neon PostgreSQL database inside Next.js App Router with React Server Components and Server Actions.
 
 ---
 
@@ -15,17 +15,17 @@ TaskFlow is a full-stack, lightweight Todo application designed to demonstrate n
 ```mermaid
 graph TD
     Client[Browser Client Components] -->|Submit Form / Toggle / Delete| ServerActions[Next.js Server Actions: src/app/actions.ts]
-    ServerActions -->|Execute Prepared SQL| SQLiteDB[(Embedded SQLite: todos.db)]
-    SQLiteDB -->|Fetch Data| ServerComp[Server Component: src/app/page.tsx]
+    ServerActions -->|Async SQL via HTTP| NeонDB[(Neon PostgreSQL: serverless)]
+    NeонDB -->|Fetch Data| ServerComp[Server Component: src/app/page.tsx]
     ServerComp -->|Render RSC Payload| Client
 ```
 
 ### Component Breakdown
 
 1. **Database Layer (`src/lib/db.ts`)**
-   - Utilizes `better-sqlite3` for fast, synchronous, embedded database queries.
-   - Configures WAL (Write-Ahead Logging) mode for enhanced concurrency.
-   - Automatically initializes table structure (`todos.db`) on application startup.
+   - Utilizes `@neondatabase/serverless` (`neon` tagged-template) for async, serverless-compatible PostgreSQL queries over HTTP.
+   - Exports an `initDb()` async function that runs `CREATE TABLE IF NOT EXISTS` on cold start.
+   - No local database file — all data is stored in the Neon cloud project.
 
 2. **Server Actions (`src/app/actions.ts`)**
    - Encapsulates database mutations (`addTodo`, `toggleTodo`, `deleteTodo`, `clearCompleted`).
@@ -40,17 +40,19 @@ graph TD
 
 ## 💾 Database Schema
 
-The SQLite database file `todos.db` is stored at the root of the project.
+The database is hosted on [Neon](https://neon.tech) (serverless PostgreSQL). The connection string is read from the `DATABASE_URL` environment variable.
 
 ### `todos` Table Definition
 
-| Field Name   | Data Type | Constraints                           | Description                          |
-|--------------|-----------|---------------------------------------|--------------------------------------|
-| `id`         | `INTEGER` | `PRIMARY KEY AUTOINCREMENT`           | Unique task identifier               |
-| `title`      | `TEXT`    | `NOT NULL`                            | Description/Title of the task        |
-| `completed`  | `INTEGER` | `DEFAULT 0`                           | 0 = Pending, 1 = Completed           |
-| `priority`   | `TEXT`    | `DEFAULT 'medium'`                    | Task priority: `low`, `medium`, `high`|
-| `created_at` | `DATETIME`| `DEFAULT CURRENT_TIMESTAMP`           | Creation timestamp                   |
+| Field Name   | Data Type    | Constraints                  | Description                              |
+|--------------|--------------|------------------------------|------------------------------------------|
+| `id`         | `SERIAL`     | `PRIMARY KEY`                | Unique task identifier (auto-increment)  |
+| `title`      | `TEXT`       | `NOT NULL`                   | Description/Title of the task            |
+| `completed`  | `BOOLEAN`    | `DEFAULT FALSE`              | Task completion state                    |
+| `task_type`  | `TEXT`       | `DEFAULT 'checkbox'`         | Task kind: `checkbox`, `time`, `input`, `number` |
+| `type_value` | `TEXT`       | `DEFAULT ''`                 | Stored value for non-checkbox task types |
+| `sort_order` | `INTEGER`    | `DEFAULT 0`                  | Manual drag-and-drop ordering position   |
+| `created_at` | `TIMESTAMPTZ`| `DEFAULT NOW()`              | Creation timestamp with timezone         |
 
 ---
 

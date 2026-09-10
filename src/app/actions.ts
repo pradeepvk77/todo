@@ -1,12 +1,15 @@
 "use server";
 
-import { db, Todo } from "@/lib/db";
+import { sql, initDb, Todo } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+
+// Ensure the table exists on every cold start
+await initDb();
 
 export async function getTodos(): Promise<Todo[]> {
   try {
-    const stmt = db.prepare("SELECT * FROM todos ORDER BY sort_order ASC, created_at DESC");
-    return stmt.all() as Todo[];
+    const rows = await sql`SELECT * FROM todos ORDER BY sort_order ASC, created_at DESC`;
+    return rows as Todo[];
   } catch (error) {
     console.error("Failed to fetch todos:", error);
     return [];
@@ -23,14 +26,13 @@ export async function addTodo(data: { title: string; task_type: string; type_val
   }
 
   try {
-    // Get highest sort_order
-    const maxOrderRow = db.prepare("SELECT MAX(sort_order) as maxOrder FROM todos").get() as { maxOrder: number | null };
-    const nextOrder = (maxOrderRow?.maxOrder ?? 0) + 1;
+    const [maxRow] = await sql`SELECT MAX(sort_order) AS "maxOrder" FROM todos`;
+    const nextOrder = ((maxRow?.maxOrder as number | null) ?? 0) + 1;
 
-    const stmt = db.prepare(
-      "INSERT INTO todos (title, task_type, type_value, sort_order) VALUES (?, ?, ?, ?)"
-    );
-    stmt.run(title, task_type, type_value, nextOrder);
+    await sql`
+      INSERT INTO todos (title, task_type, type_value, sort_order)
+      VALUES (${title}, ${task_type}, ${type_value}, ${nextOrder})
+    `;
     revalidatePath("/");
     return { success: true };
   } catch (error) {
@@ -41,8 +43,7 @@ export async function addTodo(data: { title: string; task_type: string; type_val
 
 export async function toggleTodo(id: number, currentCompleted: boolean) {
   try {
-    const stmt = db.prepare("UPDATE todos SET completed = ? WHERE id = ?");
-    stmt.run(currentCompleted ? 0 : 1, id);
+    await sql`UPDATE todos SET completed = ${!currentCompleted} WHERE id = ${id}`;
     revalidatePath("/");
     return { success: true };
   } catch (error) {
@@ -53,8 +54,7 @@ export async function toggleTodo(id: number, currentCompleted: boolean) {
 
 export async function updateTaskValue(id: number, type_value: string) {
   try {
-    const stmt = db.prepare("UPDATE todos SET type_value = ? WHERE id = ?");
-    stmt.run(type_value, id);
+    await sql`UPDATE todos SET type_value = ${type_value} WHERE id = ${id}`;
     revalidatePath("/");
     return { success: true };
   } catch (error) {
@@ -65,13 +65,10 @@ export async function updateTaskValue(id: number, type_value: string) {
 
 export async function updateTaskOrder(orderedIds: number[]) {
   try {
-    const stmt = db.prepare("UPDATE todos SET sort_order = ? WHERE id = ?");
-    const transaction = db.transaction((ids: number[]) => {
-      ids.forEach((id, index) => {
-        stmt.run(index + 1, id);
-      });
-    });
-    transaction(orderedIds);
+    // Run sequential updates — Neon HTTP driver does not support synchronous transactions
+    for (let index = 0; index < orderedIds.length; index++) {
+      await sql`UPDATE todos SET sort_order = ${index + 1} WHERE id = ${orderedIds[index]}`;
+    }
     revalidatePath("/");
     return { success: true };
   } catch (error) {
@@ -82,8 +79,7 @@ export async function updateTaskOrder(orderedIds: number[]) {
 
 export async function deleteTodo(id: number) {
   try {
-    const stmt = db.prepare("DELETE FROM todos WHERE id = ?");
-    stmt.run(id);
+    await sql`DELETE FROM todos WHERE id = ${id}`;
     revalidatePath("/");
     return { success: true };
   } catch (error) {
@@ -94,8 +90,7 @@ export async function deleteTodo(id: number) {
 
 export async function clearCompleted() {
   try {
-    const stmt = db.prepare("DELETE FROM todos WHERE completed = 1");
-    stmt.run();
+    await sql`DELETE FROM todos WHERE completed = true`;
     revalidatePath("/");
     return { success: true };
   } catch (error) {

@@ -32,7 +32,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
   const handleToggle = (id: number, currentCompleted: boolean) => {
     setTogglingId(id);
     setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: currentCompleted ? 0 : 1 } : t))
+      prev.map((t) => (t.id === id ? { ...t, completed: !currentCompleted } : t))
     );
     startTransition(async () => {
       try {
@@ -97,7 +97,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
             {...provided.droppableProps}
           >
             {todos.map((todo, index) => {
-              const isCompleted = todo.completed === 1;
+              const isCompleted = todo.completed;
               const isToggling = togglingId === todo.id;
               const isDeleting = deletingId === todo.id;
 

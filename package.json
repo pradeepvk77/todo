@@ -11,7 +11,7 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@hello-pangea/dnd": "^18.0.1",
-    "better-sqlite3": "^13.0.3",
+    "@neondatabase/serverless": "^1.1.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn": "^0.2.6",
@@ -25,7 +25,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

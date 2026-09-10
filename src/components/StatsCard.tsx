@@ -9,7 +9,7 @@ interface StatsCardProps {
 
 export function StatsCard({ todos }: StatsCardProps) {
   const total = todos.length;
-  const completed = todos.filter((t) => t.completed === 1).length;
+  const completed = todos.filter((t) => t.completed).length;
   const active = total - completed;
   const completionPercentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
