@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { addTodo } from "@/app/actions";
-import { generate15MinTimeOptions, DAYS_OF_WEEK, ALL_DAYS, formatAssignedDays } from "@/lib/time-utils";
+import { generate15MinTimeOptions, DAYS_OF_WEEK, formatAssignedDays } from "@/lib/time-utils";
 import { PlusCircle, Loader2, Clock, CheckSquare, FileText, Hash, Calendar } from "lucide-react";
 import {
   Dialog,
@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TaskCategoryPicker } from "@/components/TaskCategoryPicker";
 
 export function AddTaskDialog() {
   const [open, setOpen] = useState(false);
@@ -29,6 +30,7 @@ export function AddTaskDialog() {
   const [taskType, setTaskType] = useState<"time" | "checkbox" | "input" | "number">("time");
   const [selectedDays, setSelectedDays] = useState<string[]>(["everyday"]);
   const [initialValue, setInitialValue] = useState("");
+  const [category, setCategory] = useState("Personal");
   const [isPending, startTransition] = useTransition();
 
   const timeOptions = generate15MinTimeOptions();
@@ -89,12 +91,14 @@ export function AddTaskDialog() {
         task_type: taskType,
         type_value: initialValue || (taskType === "time" ? timeOptions[0] : ""),
         assigned_day: assignedDayValue,
+        category,
       });
 
       setTitle("");
       setTaskType("time");
       setSelectedDays(["everyday"]);
       setInitialValue("");
+      setCategory("Personal");
       setOpen(false);
     });
   };
@@ -134,6 +138,8 @@ export function AddTaskDialog() {
               required
             />
           </div>
+
+          <TaskCategoryPicker category={category} onChange={setCategory} />
 
           {/* Repeat Days (Alarm Style Multi-Select) */}
           <div className="space-y-2">

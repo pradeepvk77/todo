@@ -5,13 +5,6 @@ import type { AnalyticsData } from "@/app/actions";
 import { Flame, ListChecks, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-const typeNames: Record<string, string> = {
-  checkbox: "Checklist",
-  time: "Timed",
-  number: "Number",
-  input: "Input",
-};
-
 const colors = ["#4f83a5", "#6b987b", "#d58a36", "#ad5777"];
 
 export function AnalyticsDashboard({ analytics }: { analytics: AnalyticsData }) {
@@ -26,7 +19,7 @@ export function AnalyticsDashboard({ analytics }: { analytics: AnalyticsData }) 
     return `${x},${y}`;
   });
   const maxDayCount = Math.max(...analytics.byDayOfWeek.map((item) => item.value), 1);
-  const totalByType = analytics.byTaskType.reduce((total, item) => total + item.value, 0);
+  const totalByCategory = analytics.byCategory.reduce((total, item) => total + item.value, 0);
 
   return (
     <div className="space-y-6">
@@ -59,9 +52,9 @@ export function AnalyticsDashboard({ analytics }: { analytics: AnalyticsData }) 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card className="rounded-xl border border-border shadow-xs">
           <CardContent className="p-5 sm:p-6">
-            <h2 className="text-sm font-bold">By task type</h2>
+            <h2 className="text-sm font-bold">By category</h2>
             <p className="mt-1 text-xs text-muted-foreground">Where your completed effort goes</p>
-            {totalByType ? <div className="mt-7 flex items-center gap-6"><div className="size-32 shrink-0 rounded-full" style={{ background: `conic-gradient(${analytics.byTaskType.map((item, index) => `${colors[index % colors.length]} ${(analytics.byTaskType.slice(0, index).reduce((sum, entry) => sum + entry.value, 0) / totalByType) * 100}% ${((analytics.byTaskType.slice(0, index + 1).reduce((sum, entry) => sum + entry.value, 0) / totalByType) * 100)}%`).join(", ")}` }}><div className="m-7 size-[72px] rounded-full bg-card" /></div><div className="space-y-2 text-xs">{analytics.byTaskType.map((item, index) => <div className="flex items-center gap-2" key={item.label}><span className="size-2 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} />{typeNames[item.label] ?? item.label}: {item.value}</div>)}</div></div> : <EmptyState />}
+            {totalByCategory ? <div className="mt-7 flex items-center gap-6"><div className="size-32 shrink-0 rounded-full" style={{ background: `conic-gradient(${analytics.byCategory.map((item, index) => `${colors[index % colors.length]} ${(analytics.byCategory.slice(0, index).reduce((sum, entry) => sum + entry.value, 0) / totalByCategory) * 100}% ${((analytics.byCategory.slice(0, index + 1).reduce((sum, entry) => sum + entry.value, 0) / totalByCategory) * 100)}%`).join(", ")}` }}><div className="m-7 size-[72px] rounded-full bg-card" /></div><div className="space-y-2 text-xs">{analytics.byCategory.map((item, index) => <div className="flex items-center gap-2" key={item.label}><span className="size-2 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} />{item.label}: {item.value}</div>)}</div></div> : <EmptyState />}
           </CardContent>
         </Card>
         <Card className="rounded-xl border border-border shadow-xs">

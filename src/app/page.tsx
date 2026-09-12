@@ -98,6 +98,7 @@ export default async function Home() {
                 <span>{otherData.todos.length} {otherData.todos.length === 1 ? "task" : "tasks"} scheduled for {formattedDay} (IST)</span>
               </p>
             </div>
+            <TaskMenu otherUser />
           </div>
 
           <YouTodoList todos={otherData.todos} otherUserLabel={otherUserName} />

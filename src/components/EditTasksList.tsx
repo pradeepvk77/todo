@@ -6,7 +6,7 @@ import { deleteTodo } from "@/app/actions";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { EditTaskDialog } from "@/components/EditTaskDialog";
 import { formatAssignedDays } from "@/lib/time-utils";
-import { Trash2, Pencil, Calendar, Clock, CheckSquare, FileText, Hash, Loader2, ArrowLeft } from "lucide-react";
+import { Trash2, Pencil, Calendar, Clock, CheckSquare, FileText, Hash, Loader2, ArrowLeft, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -132,6 +132,9 @@ export function EditTasksList({ initialTodos }: EditTasksListProps) {
                           className="text-[10px] font-medium text-muted-foreground capitalize"
                         >
                           {todo.task_type}
+                        </Badge>
+                        <Badge variant="secondary" className="text-[10px] font-medium text-muted-foreground">
+                          <Tag className="mr-1 size-2.5" />{todo.category || "Personal"}
                         </Badge>
                       </div>
                     </div>

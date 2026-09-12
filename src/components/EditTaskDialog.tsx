@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { Todo } from "@/lib/db";
 import { editTodo } from "@/app/actions";
 import { generate15MinTimeOptions, DAYS_OF_WEEK, formatAssignedDays } from "@/lib/time-utils";
@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TaskCategoryPicker } from "@/components/TaskCategoryPicker";
 
 interface EditTaskDialogProps {
   todo: Todo;
@@ -41,16 +42,10 @@ export function EditTaskDialog({ todo, open, onOpenChange }: EditTaskDialogProps
   const [taskType, setTaskType] = useState<"time" | "checkbox" | "input" | "number">(todo.task_type);
   const [selectedDays, setSelectedDays] = useState<string[]>(parseInitialDays(todo.assigned_day));
   const [initialValue, setInitialValue] = useState(todo.type_value);
+  const [category, setCategory] = useState(todo.category || "Personal");
   const [isPending, startTransition] = useTransition();
 
   const timeOptions = generate15MinTimeOptions();
-
-  useEffect(() => {
-    setTitle(todo.title);
-    setTaskType(todo.task_type);
-    setSelectedDays(parseInitialDays(todo.assigned_day));
-    setInitialValue(todo.type_value);
-  }, [todo]);
 
   const handleTypeChange = (val: string | null) => {
     if (!val) return;
@@ -108,6 +103,7 @@ export function EditTaskDialog({ todo, open, onOpenChange }: EditTaskDialogProps
         task_type: taskType,
         type_value: initialValue || (taskType === "time" ? timeOptions[0] : ""),
         assigned_day: assignedDayValue,
+        category,
       });
 
       onOpenChange(false);
@@ -140,6 +136,8 @@ export function EditTaskDialog({ todo, open, onOpenChange }: EditTaskDialogProps
               required
             />
           </div>
+
+          <TaskCategoryPicker category={category} onChange={setCategory} />
 
           {/* Repeat Days (Alarm Style Multi-Select) */}
           <div className="space-y-2">

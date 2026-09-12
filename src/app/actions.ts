@@ -11,7 +11,7 @@ export interface AnalyticsData {
   bestStreak: number;
   lastSevenDays: { date: string; label: string; completed: number; total: number; percentage: number }[];
   lastThirtyDays: { date: string; label: string; completed: number; total: number; percentage: number }[];
-  byTaskType: { label: string; value: number }[];
+  byCategory: { label: string; value: number }[];
   byDayOfWeek: { label: string; value: number }[];
   taskStreaks: { title: string; streak: number }[];
 }
@@ -132,11 +132,13 @@ export async function addTodo(data: {
   task_type: string;
   type_value?: string;
   assigned_day?: string;
+  category?: string;
 }) {
   const title = data.title?.trim();
   const task_type = data.task_type || "checkbox";
   const type_value = data.type_value || "";
   const assigned_day = data.assigned_day !== undefined ? data.assigned_day : "everyday";
+  const category = data.category?.trim().slice(0, 40) || "Personal";
   const currentISTDate = getISTDateString();
 
   if (!title) {
@@ -152,8 +154,8 @@ export async function addTodo(data: {
     const nextOrder = ((maxRow?.maxOrder as number | null) ?? 0) + 1;
 
     await sql`
-      INSERT INTO todos (user_id, title, task_type, type_value, sort_order, assigned_day, last_reset_date)
-      VALUES (${userId}, ${title}, ${task_type}, ${type_value}, ${nextOrder}, ${assigned_day}, ${currentISTDate})
+      INSERT INTO todos (user_id, title, task_type, type_value, sort_order, assigned_day, category, last_reset_date)
+      VALUES (${userId}, ${title}, ${task_type}, ${type_value}, ${nextOrder}, ${assigned_day}, ${category}, ${currentISTDate})
     `;
     revalidatePath("/");
     revalidatePath("/edit-tasks");
@@ -176,7 +178,7 @@ export async function toggleTodo(id: number, currentCompleted: boolean) {
     const currentISTDate = getISTDateString();
 
     const [todo] = await sql`
-      SELECT id, title, task_type FROM todos WHERE id = ${id} AND user_id = ${userId}
+      SELECT id, title, task_type, category FROM todos WHERE id = ${id} AND user_id = ${userId}
     `;
 
     await sql`
@@ -187,8 +189,8 @@ export async function toggleTodo(id: number, currentCompleted: boolean) {
 
     if (!currentCompleted && todo) {
       await sql`
-        INSERT INTO task_completions (user_id, todo_id, todo_title, task_type, completed_date)
-        VALUES (${userId}, ${id}, ${todo.title}, ${todo.task_type}, ${currentISTDate})
+        INSERT INTO task_completions (user_id, todo_id, todo_title, task_type, category, completed_date)
+        VALUES (${userId}, ${id}, ${todo.title}, ${todo.task_type}, ${todo.category || "Personal"}, ${currentISTDate})
         ON CONFLICT (user_id, todo_id, completed_date) DO NOTHING
       `;
     } else {
@@ -225,17 +227,18 @@ function getCompletionStreak(dates: Set<string>, endDate: string) {
   return streak;
 }
 
-export async function getAnalytics(): Promise<AnalyticsData> {
+export async function getAnalytics(forOtherUser = false): Promise<AnalyticsData> {
   await ensureDb();
-  const userId = await requireUser();
+  const currentUserId = await requireUser();
+  const userId = forOtherUser ? (currentUserId === "user1" ? "user2" : "user1") : currentUserId;
   const today = getISTDateString();
   const todos = (await sql`SELECT * FROM todos WHERE user_id = ${userId}`) as Todo[];
   const completions = (await sql`
-    SELECT todo_id, todo_title, task_type, completed_date
+    SELECT todo_id, todo_title, task_type, category, completed_date
     FROM task_completions
     WHERE user_id = ${userId}
     ORDER BY completed_date DESC
-  `) as { todo_id: number; todo_title: string; task_type: string; completed_date: string }[];
+  `) as { todo_id: number; todo_title: string; task_type: string; category: string; completed_date: string }[];
 
   const completionDates = new Set(completions.map((item) => item.completed_date));
   const buildDailyAnalytics = (days: number) => Array.from({ length: days }, (_, index) => {
@@ -259,8 +262,11 @@ export async function getAnalytics(): Promise<AnalyticsData> {
   const lastThirtyDays = buildDailyAnalytics(30);
 
   const todayData = lastSevenDays[lastSevenDays.length - 1];
-  const typeCounts = new Map<string, number>();
-  completions.forEach(({ task_type }) => typeCounts.set(task_type, (typeCounts.get(task_type) ?? 0) + 1));
+  const categoryCounts = new Map<string, number>();
+  completions.forEach(({ category }) => {
+    const value = category?.trim() || "Personal";
+    categoryCounts.set(value, (categoryCounts.get(value) ?? 0) + 1);
+  });
   const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const weekdayCounts = weekdays.map((label) => ({ label, value: 0 }));
   completions.forEach(({ completed_date }) => {
@@ -298,15 +304,16 @@ export async function getAnalytics(): Promise<AnalyticsData> {
     bestStreak,
     lastSevenDays,
     lastThirtyDays,
-    byTaskType: Array.from(typeCounts, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
+    byCategory: Array.from(categoryCounts, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
     byDayOfWeek: weekdayCounts,
     taskStreaks,
   };
 }
 
-export async function getTaskHistory(date: string) {
+export async function getTaskHistory(date: string, forOtherUser = false) {
   await ensureDb();
-  const userId = await requireUser();
+  const currentUserId = await requireUser();
+  const userId = forOtherUser ? (currentUserId === "user1" ? "user2" : "user1") : currentUserId;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid date");
   const targetDate = dateFromISTString(date);
   const day = getISTDayOfWeek(targetDate);
@@ -382,12 +389,14 @@ export async function editTodo(
     task_type: string;
     type_value?: string;
     assigned_day?: string;
+    category?: string;
   }
 ) {
   const title = data.title?.trim();
   const task_type = data.task_type || "checkbox";
   const type_value = data.type_value || "";
   const assigned_day = data.assigned_day !== undefined ? data.assigned_day : "everyday";
+  const category = data.category?.trim().slice(0, 40) || "Personal";
 
   if (!title) {
     return { error: "Title is required" };
@@ -403,7 +412,7 @@ export async function editTodo(
 
     await sql`
       UPDATE todos 
-      SET title = ${title}, task_type = ${task_type}, type_value = ${type_value}, assigned_day = ${assigned_day}
+      SET title = ${title}, task_type = ${task_type}, type_value = ${type_value}, assigned_day = ${assigned_day}, category = ${category}
       WHERE id = ${id} AND user_id = ${userId}
     `;
     revalidatePath("/");
