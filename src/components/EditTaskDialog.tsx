@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { addTodo } from "@/app/actions";
-import { generate15MinTimeOptions, DAYS_OF_WEEK, ALL_DAYS, formatAssignedDays } from "@/lib/time-utils";
-import { PlusCircle, Loader2, Clock, CheckSquare, FileText, Hash, Calendar } from "lucide-react";
+import { useState, useTransition, useEffect } from "react";
+import { Todo } from "@/lib/db";
+import { editTodo } from "@/app/actions";
+import { generate15MinTimeOptions, DAYS_OF_WEEK, formatAssignedDays } from "@/lib/time-utils";
+import { Pencil, Loader2, Clock, CheckSquare, FileText, Hash, Calendar } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -23,15 +23,34 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function AddTaskDialog() {
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [taskType, setTaskType] = useState<"time" | "checkbox" | "input" | "number">("time");
-  const [selectedDays, setSelectedDays] = useState<string[]>(["everyday"]);
-  const [initialValue, setInitialValue] = useState("");
+interface EditTaskDialogProps {
+  todo: Todo;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function parseInitialDays(assignedDay?: string): string[] {
+  if (assignedDay === undefined || assignedDay === null) return ["everyday"];
+  if (assignedDay.trim() === "") return [];
+  if (assignedDay === "everyday") return ["everyday"];
+  return assignedDay.split(",").map((d) => d.trim()).filter(Boolean);
+}
+
+export function EditTaskDialog({ todo, open, onOpenChange }: EditTaskDialogProps) {
+  const [title, setTitle] = useState(todo.title);
+  const [taskType, setTaskType] = useState<"time" | "checkbox" | "input" | "number">(todo.task_type);
+  const [selectedDays, setSelectedDays] = useState<string[]>(parseInitialDays(todo.assigned_day));
+  const [initialValue, setInitialValue] = useState(todo.type_value);
   const [isPending, startTransition] = useTransition();
 
   const timeOptions = generate15MinTimeOptions();
+
+  useEffect(() => {
+    setTitle(todo.title);
+    setTaskType(todo.task_type);
+    setSelectedDays(parseInitialDays(todo.assigned_day));
+    setInitialValue(todo.type_value);
+  }, [todo]);
 
   const handleTypeChange = (val: string | null) => {
     if (!val) return;
@@ -84,48 +103,35 @@ export function AddTaskDialog() {
       : selectedDays.join(",");
 
     startTransition(async () => {
-      await addTodo({
+      await editTodo(todo.id, {
         title: title.trim(),
         task_type: taskType,
         type_value: initialValue || (taskType === "time" ? timeOptions[0] : ""),
         assigned_day: assignedDayValue,
       });
 
-      setTitle("");
-      setTaskType("time");
-      setSelectedDays(["everyday"]);
-      setInitialValue("");
-      setOpen(false);
+      onOpenChange(false);
     });
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button className="font-medium px-4 py-2 flex items-center gap-2 cursor-pointer">
-            <PlusCircle className="w-4 h-4" />
-            <span>Add Task</span>
-          </Button>
-        }
-      />
-
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md p-6 bg-card border-border text-card-foreground">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-            <PlusCircle className="w-5 h-5 text-primary" />
-            Create New Task
+            <Pencil className="w-5 h-5 text-primary" />
+            Edit Task
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 my-2">
           {/* Task Name */}
           <div className="space-y-2">
-            <Label htmlFor="task-name" className="text-xs font-semibold text-foreground">
+            <Label htmlFor="edit-task-name" className="text-xs font-semibold text-foreground">
               Task Name
             </Label>
             <Input
-              id="task-name"
+              id="edit-task-name"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -175,9 +181,6 @@ export function AddTaskDialog() {
                 );
               })}
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Select multiple days for this task to repeat (e.g. Mon, Fri).
-            </p>
           </div>
 
           {/* Task Type Selection */}
@@ -223,7 +226,7 @@ export function AddTaskDialog() {
           {taskType === "time" && (
             <div className="space-y-2 bg-muted p-3 rounded-lg border border-border">
               <Label className="text-xs font-medium text-muted-foreground">
-                Default Time (starting from current time):
+                Default Time:
               </Label>
               <Select
                 value={initialValue || timeOptions[0]}
@@ -245,11 +248,11 @@ export function AddTaskDialog() {
 
           {taskType === "number" && (
             <div className="space-y-2 bg-muted p-3 rounded-lg border border-border">
-              <Label className="text-xs font-medium text-muted-foreground">Initial Count Value:</Label>
+              <Label className="text-xs font-medium text-muted-foreground">Count Value:</Label>
               <Input
                 type="number"
                 min="0"
-                value={initialValue || "1"}
+                value={initialValue || "0"}
                 onChange={(e) => setInitialValue(e.target.value)}
                 className="text-xs bg-background"
               />
@@ -260,7 +263,7 @@ export function AddTaskDialog() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
@@ -269,7 +272,7 @@ export function AddTaskDialog() {
               disabled={isPending || !title.trim()}
             >
               {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Save Task
+              Update Task
             </Button>
           </DialogFooter>
         </form>

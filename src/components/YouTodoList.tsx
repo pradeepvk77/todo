@@ -2,7 +2,8 @@
 
 import { Todo } from "@/lib/db";
 import { TaskWidget } from "@/components/TaskWidget";
-import { HeartHandshake, Lock } from "lucide-react";
+import { formatAssignedDays } from "@/lib/time-utils";
+import { HeartHandshake, Lock, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -49,16 +50,26 @@ export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <Checkbox checked={isCompleted} disabled className="cursor-not-allowed opacity-70" />
 
-                <span
-                  className={`text-card-foreground text-sm font-medium truncate ${
-                    isCompleted ? "line-through text-muted-foreground" : ""
-                  }`}
-                >
-                  {todo.title}
-                </span>
+                <div className="min-w-0 flex-1 flex flex-col justify-center">
+                  <span
+                    className={`text-card-foreground text-sm font-semibold truncate ${
+                      isCompleted ? "line-through text-muted-foreground" : ""
+                    }`}
+                  >
+                    {todo.title}
+                  </span>
+                  <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <Calendar className="w-2.5 h-2.5 text-primary" />
+                    <span>{formatAssignedDays(todo.assigned_day)}</span>
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
+                <Badge variant="secondary" className="gap-1 text-[10px] font-normal text-muted-foreground bg-muted border border-border py-0.5 px-2">
+                  <Lock className="w-2.5 h-2.5" />
+                  <span>Read-only</span>
+                </Badge>
                 <TaskWidget todo={todo} isCompleted={isCompleted} readOnly={true} />
               </div>
             </CardContent>

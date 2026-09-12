@@ -3,12 +3,12 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { TodoList } from "@/components/TodoList";
 import { YouTodoList } from "@/components/YouTodoList";
-import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { Greeting } from "@/components/Greeting";
 import { logoutAction } from "@/app/actions/auth";
-import { User, Users, LogOut, Shield } from "lucide-react";
+import { User, Users, LogOut, Edit3, Calendar } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export const revalidate = 0;
 
@@ -23,10 +23,12 @@ export default async function Home() {
   const currentUserName = currentUserId === "user1" ? "User 1" : "User 2";
   const otherUserName = currentUserId === "user1" ? "User 2" : "User 1";
 
-  const [myTodos, otherData] = await Promise.all([
-    getTodos(),
+  const [{ todos: myTodos, todayDay }, otherData] = await Promise.all([
+    getTodos("today"),
     getOtherUserTodos(),
   ]);
+
+  const formattedDay = todayDay.charAt(0).toUpperCase() + todayDay.slice(1);
 
   return (
     <main className="min-h-screen py-10 px-4 sm:px-6 w-full max-w-xl mx-auto">
@@ -69,15 +71,21 @@ export default async function Home() {
         <TabsContent value="me" className="w-full space-y-6 focus-visible:outline-none">
           <div className="flex items-center justify-between pb-2 w-full">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
-                My Tasks
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
+                <span>My Tasks</span>
               </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {myTodos.length} {myTodos.length === 1 ? "task" : "tasks"} scheduled for today
+              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-primary inline" />
+                <span>{myTodos.length} {myTodos.length === 1 ? "task" : "tasks"} scheduled for {formattedDay} (IST)</span>
               </p>
             </div>
 
-            <AddTaskDialog />
+            <Link href="/edit-tasks">
+              <Button className="gap-2 font-medium px-4 py-2 cursor-pointer shadow-xs" variant="default">
+                <Edit3 className="w-4 h-4" />
+                <span>Edit Tasks</span>
+              </Button>
+            </Link>
           </div>
 
           <TodoList initialTodos={myTodos} />
@@ -90,8 +98,9 @@ export default async function Home() {
               <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
                 {`${otherUserName}'s Tasks`}
               </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {otherData.todos.length} {otherData.todos.length === 1 ? "task" : "tasks"} scheduled
+              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-primary inline" />
+                <span>{otherData.todos.length} {otherData.todos.length === 1 ? "task" : "tasks"} scheduled for {formattedDay} (IST)</span>
               </p>
             </div>
           </div>
