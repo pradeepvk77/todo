@@ -5,10 +5,10 @@ import { TodoList } from "@/components/TodoList";
 import { YouTodoList } from "@/components/YouTodoList";
 import { Greeting } from "@/components/Greeting";
 import { logoutAction } from "@/app/actions/auth";
-import { User, Users, LogOut, Edit3, Calendar } from "lucide-react";
+import { User, Users, LogOut, Calendar } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import { TaskMenu } from "@/components/TaskMenu";
 
 export const revalidate = 0;
 
@@ -80,12 +80,7 @@ export default async function Home() {
               </p>
             </div>
 
-            <Link href="/edit-tasks">
-              <Button className="gap-2 font-medium px-4 py-2 cursor-pointer shadow-xs" variant="default">
-                <Edit3 className="w-4 h-4" />
-                <span>Edit Tasks</span>
-              </Button>
-            </Link>
+            <TaskMenu />
           </div>
 
           <TodoList initialTodos={myTodos} />

@@ -45,4 +45,16 @@ export async function initDb() {
   await sql`
     ALTER TABLE todos ADD COLUMN IF NOT EXISTS last_reset_date TEXT DEFAULT ''
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS task_completions (
+      id              SERIAL PRIMARY KEY,
+      user_id         TEXT NOT NULL,
+      todo_id         INTEGER NOT NULL,
+      todo_title      TEXT NOT NULL,
+      task_type       TEXT NOT NULL,
+      completed_date  TEXT NOT NULL,
+      created_at      TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (user_id, todo_id, completed_date)
+    )
+  `;
 }
