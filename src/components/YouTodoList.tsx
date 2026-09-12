@@ -2,9 +2,10 @@
 
 import { Todo } from "@/lib/db";
 import { TaskWidget } from "@/components/TaskWidget";
-import { HeartHandshake } from "lucide-react";
+import { HeartHandshake, Lock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 
 interface YouTodoListProps {
   todos: Todo[];
@@ -46,7 +47,7 @@ export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
           >
             <CardContent className="p-3 sm:p-3.5 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 flex-1 min-w-0">
-                <Checkbox checked={isCompleted} disabled className="cursor_not_allowed opacity-70" />
+                <Checkbox checked={isCompleted} disabled className="cursor-not-allowed opacity-70" />
 
                 <span
                   className={`text-card-foreground text-sm font-medium truncate ${
@@ -58,7 +59,7 @@ export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                <TaskWidget todo={todo} isCompleted={isCompleted} />
+                <TaskWidget todo={todo} isCompleted={isCompleted} readOnly={true} />
               </div>
             </CardContent>
           </Card>

@@ -24,6 +24,14 @@ async function requireUser() {
   return session.userId;
 }
 
+async function verifyTaskOwnership(id: number, userId: string): Promise<boolean> {
+  const rows = await sql`
+    SELECT id, user_id FROM todos WHERE id = ${id}
+  `;
+  if (!rows || rows.length === 0) return false;
+  return (rows[0] as Todo).user_id === userId;
+}
+
 export async function getTodos(): Promise<Todo[]> {
   try {
     await ensureDb();
@@ -93,6 +101,11 @@ export async function toggleTodo(id: number, currentCompleted: boolean) {
   try {
     await ensureDb();
     const userId = await requireUser();
+    const isOwner = await verifyTaskOwnership(id, userId);
+    if (!isOwner) {
+      return { error: "Unauthorized: You can only modify your own tasks" };
+    }
+
     await sql`
       UPDATE todos 
       SET completed = ${!currentCompleted} 
@@ -110,6 +123,11 @@ export async function updateTaskValue(id: number, type_value: string) {
   try {
     await ensureDb();
     const userId = await requireUser();
+    const isOwner = await verifyTaskOwnership(id, userId);
+    if (!isOwner) {
+      return { error: "Unauthorized: You can only modify your own tasks" };
+    }
+
     await sql`
       UPDATE todos 
       SET type_value = ${type_value} 
@@ -127,6 +145,14 @@ export async function updateTaskOrder(orderedIds: number[]) {
   try {
     await ensureDb();
     const userId = await requireUser();
+    
+    for (const id of orderedIds) {
+      const isOwner = await verifyTaskOwnership(id, userId);
+      if (!isOwner) {
+        return { error: "Unauthorized: You can only modify your own tasks" };
+      }
+    }
+
     for (let index = 0; index < orderedIds.length; index++) {
       await sql`
         UPDATE todos 
@@ -146,6 +172,11 @@ export async function deleteTodo(id: number) {
   try {
     await ensureDb();
     const userId = await requireUser();
+    const isOwner = await verifyTaskOwnership(id, userId);
+    if (!isOwner) {
+      return { error: "Unauthorized: You can only modify your own tasks" };
+    }
+
     await sql`
       DELETE FROM todos 
       WHERE id = ${id} AND user_id = ${userId}

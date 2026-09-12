@@ -19,9 +19,10 @@ import { Badge } from "@/components/ui/badge";
 interface TaskWidgetProps {
   todo: Todo;
   isCompleted: boolean;
+  readOnly?: boolean;
 }
 
-export function TaskWidget({ todo, isCompleted }: TaskWidgetProps) {
+export function TaskWidget({ todo, isCompleted, readOnly = false }: TaskWidgetProps) {
   const [isPending, startTransition] = useTransition();
   const [val, setVal] = useState(todo.type_value);
 
@@ -29,6 +30,7 @@ export function TaskWidget({ todo, isCompleted }: TaskWidgetProps) {
   const timeOptions = generate15MinTimeOptions();
 
   const handleValueChange = (newValue: string | null) => {
+    if (readOnly) return;
     const valueToSave = newValue || "";
     setVal(valueToSave);
     startTransition(async () => {
@@ -41,8 +43,8 @@ export function TaskWidget({ todo, isCompleted }: TaskWidgetProps) {
 
     return (
       <div className="flex items-center gap-2">
-        <Select value={defaultTime} onValueChange={handleValueChange} disabled={isPending || isCompleted}>
-          <SelectTrigger className="h-8 w-32 text-xs font-medium border-border bg-background text-foreground rounded-md">
+        <Select value={defaultTime} onValueChange={handleValueChange} disabled={readOnly || isPending || isCompleted}>
+          <SelectTrigger className="h-8 w-32 text-xs font-medium border-border bg-background text-foreground rounded-md disabled:opacity-60 disabled:cursor-not-allowed">
             <Clock className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
             <SelectValue placeholder="Select Time" />
           </SelectTrigger>
@@ -62,11 +64,13 @@ export function TaskWidget({ todo, isCompleted }: TaskWidgetProps) {
     const num = parseInt(val || "0", 10);
 
     const handleDecrement = () => {
+      if (readOnly) return;
       const next = Math.max(0, num - 1);
       handleValueChange(String(next));
     };
 
     const handleIncrement = () => {
+      if (readOnly) return;
       const next = num + 1;
       handleValueChange(String(next));
     };
@@ -78,8 +82,8 @@ export function TaskWidget({ todo, isCompleted }: TaskWidgetProps) {
           variant="ghost"
           size="icon"
           onClick={handleDecrement}
-          disabled={isPending || isCompleted || num <= 0}
-          className="h-6 w-6 rounded text-muted-foreground hover:text-foreground"
+          disabled={readOnly || isPending || isCompleted || num <= 0}
+          className="h-6 w-6 rounded text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Minus className="w-3 h-3" />
         </Button>
@@ -91,8 +95,8 @@ export function TaskWidget({ todo, isCompleted }: TaskWidgetProps) {
           variant="ghost"
           size="icon"
           onClick={handleIncrement}
-          disabled={isPending || isCompleted}
-          className="h-6 w-6 rounded text-muted-foreground hover:text-foreground"
+          disabled={readOnly || isPending || isCompleted}
+          className="h-6 w-6 rounded text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-3 h-3" />
         </Button>
@@ -106,11 +110,12 @@ export function TaskWidget({ todo, isCompleted }: TaskWidgetProps) {
         <Input
           type="text"
           value={val}
-          onChange={(e) => setVal(e.target.value)}
-          onBlur={() => handleValueChange(val)}
+          onChange={(e) => !readOnly && setVal(e.target.value)}
+          onBlur={() => !readOnly && handleValueChange(val)}
           placeholder="Note..."
-          disabled={isCompleted}
-          className="h-8 text-xs bg-background border-input text-foreground rounded-md"
+          disabled={readOnly || isCompleted}
+          readOnly={readOnly}
+          className="h-8 text-xs bg-background border-input text-foreground rounded-md disabled:opacity-60 disabled:cursor-not-allowed"
         />
       </div>
     );
