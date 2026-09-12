@@ -36,7 +36,6 @@ export function Greeting({ userName }: GreetingProps) {
   );
 
   const timeData = isMounted ? getClientTimeData() : null;
-  const displayName = userName ? `, ${userName}` : "";
 
   return (
     <div className="flex items-center gap-3">
@@ -45,7 +44,7 @@ export function Greeting({ userName }: GreetingProps) {
       </div>
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-          {timeData ? `${timeData.greeting.text}${displayName} ${timeData.greeting.emoji}` : `Hello${displayName} 👋`}
+          {timeData ? `${timeData.greeting.text} ${timeData.greeting.emoji}` : "Hello 👋"}
         </h1>
         <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground mt-1">
           <Calendar className="w-3.5 h-3.5" />

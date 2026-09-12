@@ -48,11 +48,6 @@ export default async function Home() {
             </Button>
           </form>
         </div>
-
-        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 py-1.5 px-3 rounded-md w-fit border border-border/50">
-          <Shield className="w-3.5 h-3.5 text-emerald-500" />
-          <span>Authenticated as <strong className="text-foreground font-semibold">{currentUserName}</strong></span>
-        </div>
       </header>
 
       {/* Main Tabs Navigation (Me / You) */}
@@ -61,12 +56,12 @@ export default async function Home() {
         <TabsList className="w-full">
           <TabsTrigger value="me" className="flex-1">
             <User className="w-4 h-4" />
-            <span>Me ({currentUserName})</span>
+            <span>Me</span>
           </TabsTrigger>
 
           <TabsTrigger value="you" className="flex-1">
             <Users className="w-4 h-4" />
-            <span>You ({otherUserName})</span>
+            <span>You</span>
           </TabsTrigger>
         </TabsList>
 
