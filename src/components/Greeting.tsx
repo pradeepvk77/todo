@@ -24,11 +24,7 @@ function getClientTimeData() {
   };
 }
 
-interface GreetingProps {
-  userName?: string;
-}
-
-export function Greeting({ userName }: GreetingProps) {
+export function Greeting() {
   const isMounted = useSyncExternalStore(
     emptySubscribe,
     () => true,
@@ -38,12 +34,12 @@ export function Greeting({ userName }: GreetingProps) {
   const timeData = isMounted ? getClientTimeData() : null;
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex min-w-0 items-center gap-3">
       <div className="p-3 bg-primary text-primary-foreground rounded-lg shadow-xs flex-shrink-0">
         <CheckSquare className="w-6 h-6" />
       </div>
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+        <h1 className="whitespace-nowrap text-xl font-bold tracking-tight text-foreground sm:text-3xl">
           {timeData ? `${timeData.greeting.text} ${timeData.greeting.emoji}` : "Hello 👋"}
         </h1>
         <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground mt-1">

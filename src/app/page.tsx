@@ -1,4 +1,4 @@
-import { getTodos, getOtherUserTodos } from "@/app/actions";
+import { getFriendNicknamePreference, getTodos, getOtherUserTodos } from "@/app/actions";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { TodoList } from "@/components/TodoList";
@@ -20,13 +20,14 @@ export default async function Home() {
   }
 
   const currentUserId = session.userId;
-  const currentUserName = currentUserId === "user1" ? "User 1" : "User 2";
-  const otherUserName = currentUserId === "user1" ? "User 2" : "User 1";
+  const defaultOtherUserName = currentUserId === "user1" ? "User 2" : "User 1";
 
-  const [{ todos: myTodos, todayDay }, otherData] = await Promise.all([
+  const [{ todos: myTodos, todayDay }, otherData, friendNickname] = await Promise.all([
     getTodos("today"),
     getOtherUserTodos(),
+    getFriendNicknamePreference(),
   ]);
+  const otherUserName = friendNickname || defaultOtherUserName;
 
   const formattedDay = todayDay.charAt(0).toUpperCase() + todayDay.slice(1);
 
@@ -35,9 +36,9 @@ export default async function Home() {
       {/* Top Header with Greeting, Session Badge & Logout */}
       <header className="mb-8 pb-6 border-b border-border w-full space-y-4">
         <div className="flex items-start justify-between gap-4">
-          <Greeting userName={currentUserName} />
+          <Greeting />
           
-          <form action={logoutAction}>
+          <form action={logoutAction} className="shrink-0">
             <Button
               type="submit"
               variant="outline"
@@ -63,7 +64,7 @@ export default async function Home() {
 
           <TabsTrigger value="you" className="flex-1">
             <Users className="w-4 h-4" />
-            <span>You</span>
+            <span className="truncate">{otherUserName}</span>
           </TabsTrigger>
         </TabsList>
 

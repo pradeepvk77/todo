@@ -4,6 +4,7 @@ import { sql, initDb, Todo } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { getISTDateString, getISTDayOfWeek, isTaskActiveOnDay } from "@/lib/time-utils";
+import { PushSubscriptionData, sendPushToUser } from "@/lib/push";
 
 export interface AnalyticsData {
   today: { completed: number; total: number; percentage: number };
@@ -42,6 +43,50 @@ async function verifyTaskOwnership(id: number, userId: string): Promise<boolean>
   `;
   if (!rows || rows.length === 0) return false;
   return (rows[0] as Todo).user_id === userId;
+}
+
+function getOtherUserId(userId: string) {
+  return userId === "user1" ? "user2" : "user1";
+}
+
+function getUserName(userId: string) {
+  return userId === "user1" ? "User 1" : "User 2";
+}
+
+async function getFriendNickname(recipientUserId: string, friendUserId: string) {
+  const [preference] = await sql`
+    SELECT friend_nickname FROM user_preferences WHERE user_id = ${recipientUserId}
+  `;
+  const nickname = (preference?.friend_nickname as string | undefined)?.trim();
+  return nickname || getUserName(friendUserId);
+}
+
+function isValidSubscription(subscription: PushSubscriptionData) {
+  return Boolean(
+    subscription &&
+      typeof subscription.endpoint === "string" &&
+      subscription.endpoint.startsWith("https://") &&
+      subscription.endpoint.length <= 4096 &&
+      typeof subscription.keys?.p256dh === "string" &&
+      subscription.keys.p256dh.length <= 1024 &&
+      typeof subscription.keys?.auth === "string" &&
+      subscription.keys.auth.length <= 1024
+  );
+}
+
+async function notifyOtherUser(userId: string, action: "added" | "completed", taskTitle: string) {
+  try {
+    const recipientUserId = getOtherUserId(userId);
+    const friendName = await getFriendNickname(recipientUserId, userId);
+    await sendPushToUser(recipientUserId, {
+      title: "Lets Do It",
+      body: `${friendName} ${action} “${taskTitle}”.`,
+      url: "/",
+    });
+  } catch (error) {
+    // A delivery failure must never prevent a task from being saved.
+    console.error("Failed to send task push notification:", error);
+  }
 }
 
 /**
@@ -102,7 +147,7 @@ export async function getOtherUserTodos(): Promise<{ userId: string; todos: Todo
   try {
     await ensureDb();
     const userId = await requireUser();
-    const otherUserId = userId === "user1" ? "user2" : "user1";
+    const otherUserId = getOtherUserId(userId);
 
     // Perform daily reset check for other user
     await checkAndPerformDailyReset(otherUserId);
@@ -157,6 +202,7 @@ export async function addTodo(data: {
       INSERT INTO todos (user_id, title, task_type, type_value, sort_order, assigned_day, category, last_reset_date)
       VALUES (${userId}, ${title}, ${task_type}, ${type_value}, ${nextOrder}, ${assigned_day}, ${category}, ${currentISTDate})
     `;
+    await notifyOtherUser(userId, "added", title);
     revalidatePath("/");
     revalidatePath("/edit-tasks");
     return { success: true };
@@ -193,6 +239,7 @@ export async function toggleTodo(id: number, currentCompleted: boolean) {
         VALUES (${userId}, ${id}, ${todo.title}, ${todo.task_type}, ${todo.category || "Personal"}, ${currentISTDate})
         ON CONFLICT (user_id, todo_id, completed_date) DO NOTHING
       `;
+      await notifyOtherUser(userId, "completed", todo.title);
     } else {
       await sql`
         DELETE FROM task_completions
@@ -206,6 +253,81 @@ export async function toggleTodo(id: number, currentCompleted: boolean) {
   } catch (error) {
     console.error("Failed to toggle todo:", error);
     return { error: "Failed to update task" };
+  }
+}
+
+export async function subscribeToPushNotifications(subscription: PushSubscriptionData) {
+  if (!isValidSubscription(subscription)) {
+    return { error: "Invalid push subscription" };
+  }
+
+  try {
+    await ensureDb();
+    const userId = await requireUser();
+    await sql`
+      INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+      VALUES (${userId}, ${subscription.endpoint}, ${subscription.keys.p256dh}, ${subscription.keys.auth})
+      ON CONFLICT (endpoint) DO UPDATE
+      SET user_id = EXCLUDED.user_id,
+          p256dh = EXCLUDED.p256dh,
+          auth = EXCLUDED.auth,
+          updated_at = NOW()
+    `;
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to save push subscription:", error);
+    return { error: "Failed to enable notifications" };
+  }
+}
+
+export async function unsubscribeFromPushNotifications(endpoint: string) {
+  if (!endpoint.startsWith("https://") || endpoint.length > 4096) {
+    return { error: "Invalid push subscription" };
+  }
+
+  try {
+    await ensureDb();
+    const userId = await requireUser();
+    await sql`
+      DELETE FROM push_subscriptions
+      WHERE user_id = ${userId} AND endpoint = ${endpoint}
+    `;
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to remove push subscription:", error);
+    return { error: "Failed to disable notifications" };
+  }
+}
+
+export async function getFriendNicknamePreference() {
+  try {
+    await ensureDb();
+    const userId = await requireUser();
+    return await getFriendNickname(userId, getOtherUserId(userId));
+  } catch (error) {
+    console.error("Failed to fetch friend nickname:", error);
+    return "";
+  }
+}
+
+export async function saveFriendNickname(nickname: string) {
+  const normalizedNickname = nickname.trim().slice(0, 40);
+  try {
+    await ensureDb();
+    const userId = await requireUser();
+    await sql`
+      INSERT INTO user_preferences (user_id, friend_nickname)
+      VALUES (${userId}, ${normalizedNickname})
+      ON CONFLICT (user_id) DO UPDATE
+      SET friend_nickname = EXCLUDED.friend_nickname,
+          updated_at = NOW()
+    `;
+    revalidatePath("/");
+    revalidatePath("/settings");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to save friend nickname:", error);
+    return { error: "Failed to save nickname" };
   }
 }
 

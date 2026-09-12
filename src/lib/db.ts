@@ -66,4 +66,26 @@ export async function initDb() {
   await sql`
     ALTER TABLE task_completions ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Personal'
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id          SERIAL PRIMARY KEY,
+      user_id     TEXT NOT NULL,
+      endpoint    TEXT NOT NULL UNIQUE,
+      p256dh      TEXT NOT NULL,
+      auth        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS push_subscriptions_user_id_idx
+    ON push_subscriptions (user_id)
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      user_id         TEXT PRIMARY KEY,
+      friend_nickname TEXT NOT NULL DEFAULT '',
+      updated_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
 }

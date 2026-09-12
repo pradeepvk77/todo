@@ -50,6 +50,18 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser to start using the application.
 
+### Phone push notifications
+
+The app uses standards-based Web Push with VAPID keys; no Firebase account is required. Copy `.env.example` to `.env` and set the VAPID variables. The repository's local `.env` already has a generated key pair for development, but use a new pair for production:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Set `VAPID_SUBJECT` to an email address you control, for example `mailto:you@example.com`. In your hosting provider, add all three VAPID variables as environment variables; keep `VAPID_PRIVATE_KEY` secret.
+
+Deploy over HTTPS. Each user must log in on their phone and select **Enable alerts** once. On iPhone/iPad, they must first use Safari's **Add to Home Screen** option, then open the installed app and enable alerts. When either user adds or completes a task, the other user's subscribed phone receives a system notification.
+
 ---
 
 ## 📦 Project Structure
