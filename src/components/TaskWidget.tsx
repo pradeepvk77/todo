@@ -106,7 +106,7 @@ export function TaskWidget({ todo, isCompleted, readOnly = false }: TaskWidgetPr
 
   if (todo.task_type === "input") {
     return (
-      <div className="flex items-center gap-2 max-w-[160px] sm:max-w-[200px]">
+      <div className="flex items-center gap-2 max-w-30">
         <Input
           type="text"
           value={val}

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { addTodo } from "@/app/actions";
 import { generate15MinTimeOptions, DAYS_OF_WEEK, formatAssignedDays } from "@/lib/time-utils";
-import { PlusCircle, Loader2, Clock, CheckSquare, FileText, Hash, Calendar } from "lucide-react";
+import { PlusCircle, Loader2, Clock, FileText, Calendar } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,7 @@ import { TaskCategoryPicker } from "@/components/TaskCategoryPicker";
 export function AddTaskDialog() {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [taskType, setTaskType] = useState<"time" | "checkbox" | "input" | "number">("time");
+  const [taskType, setTaskType] = useState<"time" | "input">("time");
   const [selectedDays, setSelectedDays] = useState<string[]>(["everyday"]);
   const [initialValue, setInitialValue] = useState("");
   const [category, setCategory] = useState("Personal");
@@ -37,12 +37,10 @@ export function AddTaskDialog() {
 
   const handleTypeChange = (val: string | null) => {
     if (!val) return;
-    const typeVal = val as "time" | "checkbox" | "input" | "number";
+    const typeVal = val as "time" | "input";
     setTaskType(typeVal);
     if (typeVal === "time") {
       setInitialValue(timeOptions[0]);
-    } else if (typeVal === "number") {
-      setInitialValue("1");
     } else {
       setInitialValue("");
     }
@@ -201,24 +199,10 @@ export function AddTaskDialog() {
                   </div>
                 </SelectItem>
 
-                <SelectItem value="number">
-                  <div className="flex items-center gap-2">
-                    <Hash className="w-4 h-4 text-amber-500" />
-                    <span>Number Counter (with + / - buttons)</span>
-                  </div>
-                </SelectItem>
-
                 <SelectItem value="input">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-blue-500" />
-                    <span>Text Note Input</span>
-                  </div>
-                </SelectItem>
-
-                <SelectItem value="checkbox">
-                  <div className="flex items-center gap-2">
-                    <CheckSquare className="w-4 h-4 text-emerald-500" />
-                    <span>Simple Checkbox</span>
+                    <span>Notes</span>
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -246,19 +230,6 @@ export function AddTaskDialog() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          )}
-
-          {taskType === "number" && (
-            <div className="space-y-2 bg-muted p-3 rounded-lg border border-border">
-              <Label className="text-xs font-medium text-muted-foreground">Initial Count Value:</Label>
-              <Input
-                type="number"
-                min="0"
-                value={initialValue || "1"}
-                onChange={(e) => setInitialValue(e.target.value)}
-                className="text-xs bg-background"
-              />
             </div>
           )}
 

@@ -75,10 +75,6 @@ export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Badge variant="secondary" className="gap-1 text-[10px] font-normal text-muted-foreground bg-muted border border-border py-0.5 px-2">
-                  <Lock className="w-2.5 h-2.5" />
-                  <span>Read-only</span>
-                </Badge>
                 <TaskWidget todo={todo} isCompleted={isCompleted} readOnly={true} />
               </div>
             </CardContent>
