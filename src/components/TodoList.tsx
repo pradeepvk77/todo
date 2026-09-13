@@ -8,6 +8,7 @@ import { formatAssignedDays } from "@/lib/time-utils";
 import { GripVertical, CheckSquare, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { TaskFilter, TaskFilters } from "@/components/TaskFilters";
 import {
   DragDropContext,
   Droppable,
@@ -23,6 +24,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
   const [todos, setTodos] = useState<Todo[]>(initialTodos);
   const [prevInitialTodos, setPrevInitialTodos] = useState<Todo[]>(initialTodos);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [filter, setFilter] = useState<TaskFilter>("all");
   const [, startTransition] = useTransition();
 
   if (initialTodos !== prevInitialTodos) {
@@ -45,6 +47,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
   };
 
   const handleDragEnd = (result: DropResult) => {
+    if (filter !== "all") return;
     if (!result.destination) return;
     if (result.destination.index === result.source.index) return;
 
@@ -77,15 +80,21 @@ export function TodoList({ initialTodos }: TodoListProps) {
     );
   }
 
+  const pendingCount = todos.filter((todo) => !todo.completed).length;
+  const completedCount = todos.length - pendingCount;
+  const visibleTodos = todos.filter((todo) => filter === "all" || (filter === "completed" ? todo.completed : !todo.completed));
+
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
+    <div className="space-y-4">
+      <TaskFilters value={filter} onChange={setFilter} total={todos.length} pending={pendingCount} completed={completedCount} />
+      {visibleTodos.length === 0 ? <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">No {filter} tasks for today.</p> : <DragDropContext onDragEnd={handleDragEnd}>
       <Droppable droppableId="todo-list">
         {(provided) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
           >
-            {todos.map((todo, index) => {
+            {visibleTodos.map((todo, index) => {
               const isCompleted = todo.completed;
               const isToggling = togglingId === todo.id;
 
@@ -94,6 +103,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
                   key={todo.id.toString()}
                   draggableId={todo.id.toString()}
                   index={index}
+                  isDragDisabled={filter !== "all"}
                 >
                   {(provided, snapshot) => (
                     <div
@@ -113,12 +123,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
                       >
                         <CardContent className="p-3 sm:p-3.5 flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div
-                              {...provided.dragHandleProps}
-                              className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1 rounded flex-shrink-0"
-                            >
-                              <GripVertical className="w-4 h-4" />
-                            </div>
+                            {filter === "all" && <div {...provided.dragHandleProps} className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1 rounded flex-shrink-0"><GripVertical className="w-4 h-4" /></div>}
 
                             <Checkbox
                               checked={isCompleted}
@@ -155,6 +160,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
           </div>
         )}
       </Droppable>
-    </DragDropContext>
+    </DragDropContext>}
+    </div>
   );
 }

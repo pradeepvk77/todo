@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Todo } from "@/lib/db";
 import { TaskWidget } from "@/components/TaskWidget";
 import { formatAssignedDays } from "@/lib/time-utils";
@@ -7,6 +8,7 @@ import { HeartHandshake, Lock, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { TaskFilter, TaskFilters } from "@/components/TaskFilters";
 
 interface YouTodoListProps {
   todos: Todo[];
@@ -14,6 +16,7 @@ interface YouTodoListProps {
 }
 
 export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
+  const [filter, setFilter] = useState<TaskFilter>("all");
   if (todos.length === 0) {
     return (
       <Card className="border border-border bg-card p-8 text-center shadow-xs rounded-xl">
@@ -34,9 +37,15 @@ export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
     );
   }
 
+  const pendingCount = todos.filter((todo) => !todo.completed).length;
+  const completedCount = todos.length - pendingCount;
+  const visibleTodos = todos.filter((todo) => filter === "all" || (filter === "completed" ? todo.completed : !todo.completed));
+
   return (
-    <div className="space-y-2.5">
-      {todos.map((todo) => {
+    <div className="space-y-4">
+      <TaskFilters value={filter} onChange={setFilter} total={todos.length} pending={pendingCount} completed={completedCount} />
+      {visibleTodos.length === 0 ? <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">No {filter} tasks for today.</p> : <div className="space-y-2.5">
+      {visibleTodos.map((todo) => {
         const isCompleted = todo.completed;
 
         return (
@@ -76,6 +85,7 @@ export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
           </Card>
         );
       })}
+      </div>}
     </div>
   );
 }
