@@ -8,8 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 const colors = ["#4f83a5", "#6b987b", "#d58a36", "#ad5777"];
 
 export function AnalyticsDashboard({ analytics }: { analytics: AnalyticsData }) {
-  const [range, setRange] = useState<"week" | "month">("week");
-  const rangeData = range === "week" ? analytics.lastSevenDays : analytics.lastThirtyDays;
+  const [range, setRange] = useState<"sevenDays" | "lastMonth">("sevenDays");
+  const rangeData = range === "sevenDays" ? analytics.lastSevenDays : analytics.lastThirtyDays;
+  const rangeTitle = range === "sevenDays" ? "Last 7 days" : "Last month";
   const chartWidth = 680;
   const chartHeight = 180;
   const chartPadding = { top: 12, right: 12, bottom: 30, left: 28 };
@@ -31,9 +32,9 @@ export function AnalyticsDashboard({ analytics }: { analytics: AnalyticsData }) 
 
       <Card className="rounded-xl border border-border shadow-xs">
         <CardContent className="p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-bold">Last {range === "week" ? "7 days" : "30 days"}</h2><p className="mt-1 text-xs text-muted-foreground">Your daily completion rate</p></div><div className="flex rounded-lg border border-border bg-muted p-0.5 text-xs"><button onClick={() => setRange("week")} className={`rounded-md px-2.5 py-1.5 font-medium cursor-pointer ${range === "week" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}>Week</button><button onClick={() => setRange("month")} className={`rounded-md px-2.5 py-1.5 font-medium cursor-pointer ${range === "month" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}>Month</button></div></div>
+          <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-bold">{rangeTitle}</h2><p className="mt-1 text-xs text-muted-foreground">Your daily completion rate</p></div><div className="flex rounded-lg border border-border bg-muted p-0.5 text-xs"><button onClick={() => setRange("sevenDays")} className={`rounded-md px-2.5 py-1.5 font-medium cursor-pointer ${range === "sevenDays" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}>Last 7 days</button><button onClick={() => setRange("lastMonth")} className={`rounded-md px-2.5 py-1.5 font-medium cursor-pointer ${range === "lastMonth" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"}`}>Last month</button></div></div>
           <div className="mt-4 h-52 w-full">
-            <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="size-full overflow-visible" role="img" aria-label="Seven day completion rate chart">
+            <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="size-full overflow-visible" role="img" aria-label={`${rangeTitle} completion rate chart`}>
               {[0, 25, 50, 75, 100].map((value) => {
                 const y = chartPadding.top + ((100 - value) * (chartHeight - chartPadding.top - chartPadding.bottom)) / 100;
                 return <g key={value}><line x1={chartPadding.left} x2={chartWidth - chartPadding.right} y1={y} y2={y} stroke="#e4e4e7" /><text x="0" y={y + 4} fill="#a1a1aa" fontSize="11">{value}</text></g>;
@@ -41,8 +42,8 @@ export function AnalyticsDashboard({ analytics }: { analytics: AnalyticsData }) 
               <polyline points={points.join(" ")} fill="none" stroke="#18181b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               {rangeData.map((item, index) => {
                 const [x, y] = points[index].split(",");
-                const showLabel = range === "week" || index % 5 === 0 || index === rangeData.length - 1;
-                return <g key={item.date}><circle cx={x} cy={y} r={range === "week" ? "4.5" : "2.5"} fill="#18181b"><title>{`${item.date}: ${item.percentage}% (${item.completed}/${item.total})`}</title></circle>{showLabel && <text x={x} y={chartHeight - 4} textAnchor="middle" fill="#a1a1aa" fontSize="11">{range === "week" ? item.label : item.label}</text>}</g>;
+                const showLabel = range === "sevenDays" || index % 5 === 0 || index === rangeData.length - 1;
+                return <g key={item.date}><circle cx={x} cy={y} r={range === "sevenDays" ? "4.5" : "2.5"} fill="#18181b"><title>{`${item.date}: ${item.percentage}% (${item.completed}/${item.total})`}</title></circle>{showLabel && <text x={x} y={chartHeight - 4} textAnchor="middle" fill="#a1a1aa" fontSize="11">{item.label}</text>}</g>;
               })}
             </svg>
           </div>
