@@ -6,7 +6,6 @@ import { YouTodoList } from "@/components/YouTodoList";
 import { Greeting } from "@/components/Greeting";
 import { Calendar } from "lucide-react";
 import { TaskMenu } from "@/components/TaskMenu";
-import { DashboardMenu } from "@/components/DashboardMenu";
 import { DailyQuote } from "@/components/DailyQuote";
 
 export const revalidate = 0;
@@ -38,7 +37,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ u
       <header className="mb-8 pb-6 border-b border-border w-full space-y-4">
         <div className="flex items-start justify-between gap-4">
           <Greeting />
-          <DashboardMenu otherUserName={otherUserName} viewingOtherUser={viewingOtherUser} />
         </div>
       </header>
 
@@ -57,7 +55,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ u
               </p>
             </div>
 
-            <TaskMenu />
+            <TaskMenu otherUserName={otherUserName} />
           </div>
 
           <TodoList initialTodos={myTodos} />
@@ -74,7 +72,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ u
                 <span>{otherData.todos.length} {otherData.todos.length === 1 ? "task" : "tasks"} scheduled for {formattedDay} (IST)</span>
               </p>
             </div>
-            <TaskMenu otherUser />
+            <TaskMenu otherUser otherUserName={otherUserName} />
           </div>
 
           <YouTodoList todos={otherData.todos} otherUserLabel={otherUserName} />
