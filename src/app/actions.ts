@@ -1,6 +1,6 @@
 "use server";
 
-import { sql, initDb, Todo } from "@/lib/db";
+import { sql, initDb, Todo, DaySection, normalizeDaySection } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { getISTDateString, getISTDayOfWeek, isTaskActiveOnDay } from "@/lib/time-utils";
@@ -107,10 +107,23 @@ async function checkAndPerformDailyReset(userId: string) {
 }
 
 /**
+ * Backwards compatibility migration: Ensures legacy rows missing day_section are assigned 'MORNING'
+ */
+async function migrateLegacyTaskSections(userId: string) {
+  try {
+    await sql`
+      UPDATE todos
+      SET day_section = 'MORNING'
+      WHERE user_id = ${userId}
+        AND (day_section IS NULL OR day_section = '' OR day_section NOT IN ('MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'))
+    `;
+  } catch (error) {
+    console.error("Failed to migrate legacy task sections:", error);
+  }
+}
+
+/**
  * Fetch todos for logged in user.
- * If dayFilter === "today" (default), fetches tasks active for today's IST day of week (or "everyday").
- * If dayFilter === "all", fetches all tasks regardless of day (for Edit Tasks management page).
- * If dayFilter is a specific day name, filters for tasks active on that day.
  */
 export async function getTodos(dayFilter: string = "today"): Promise<{ todos: Todo[]; todayDay: string }> {
   try {
@@ -119,13 +132,19 @@ export async function getTodos(dayFilter: string = "today"): Promise<{ todos: To
     
     // Check and trigger daily reset at midnight IST
     await checkAndPerformDailyReset(userId);
+    await migrateLegacyTaskSections(userId);
 
     const todayDay = getISTDayOfWeek();
-    const allUserRows = (await sql`
+    const rawUserRows = (await sql`
       SELECT * FROM todos 
       WHERE user_id = ${userId} 
       ORDER BY sort_order ASC, created_at DESC
     `) as Todo[];
+
+    const allUserRows = rawUserRows.map((t) => ({
+      ...t,
+      day_section: normalizeDaySection(t.day_section, t.title),
+    }));
 
     let filteredTodos: Todo[];
 
@@ -151,13 +170,19 @@ export async function getOtherUserTodos(): Promise<{ userId: string; todos: Todo
 
     // Perform daily reset check for other user
     await checkAndPerformDailyReset(otherUserId);
+    await migrateLegacyTaskSections(otherUserId);
 
     const todayDay = getISTDayOfWeek();
-    const allOtherRows = (await sql`
+    const rawOtherRows = (await sql`
       SELECT * FROM todos 
       WHERE user_id = ${otherUserId} 
       ORDER BY sort_order ASC, created_at DESC
     `) as Todo[];
+
+    const allOtherRows = rawOtherRows.map((t) => ({
+      ...t,
+      day_section: normalizeDaySection(t.day_section, t.title),
+    }));
 
     const filteredTodos = allOtherRows.filter((t) => isTaskActiveOnDay(t.assigned_day, todayDay));
 
@@ -178,12 +203,14 @@ export async function addTodo(data: {
   type_value?: string;
   assigned_day?: string;
   category?: string;
+  day_section?: string;
 }) {
   const title = data.title?.trim();
   const task_type = data.task_type || "checkbox";
   const type_value = data.type_value || "";
   const assigned_day = data.assigned_day !== undefined ? data.assigned_day : "everyday";
   const category = data.category?.trim().slice(0, 40) || "Personal";
+  const day_section = normalizeDaySection(data.day_section, title);
   const currentISTDate = getISTDateString();
 
   if (!title) {
@@ -199,8 +226,8 @@ export async function addTodo(data: {
     const nextOrder = ((maxRow?.maxOrder as number | null) ?? 0) + 1;
 
     await sql`
-      INSERT INTO todos (user_id, title, task_type, type_value, sort_order, assigned_day, category, last_reset_date)
-      VALUES (${userId}, ${title}, ${task_type}, ${type_value}, ${nextOrder}, ${assigned_day}, ${category}, ${currentISTDate})
+      INSERT INTO todos (user_id, title, task_type, type_value, sort_order, assigned_day, category, day_section, last_reset_date)
+      VALUES (${userId}, ${title}, ${task_type}, ${type_value}, ${nextOrder}, ${assigned_day}, ${category}, ${day_section}, ${currentISTDate})
     `;
     await notifyOtherUser(userId, "added", title);
     revalidatePath("/");
@@ -211,6 +238,7 @@ export async function addTodo(data: {
     return { error: "Failed to save task to database" };
   }
 }
+
 
 export async function toggleTodo(id: number, currentCompleted: boolean) {
   try {
@@ -503,6 +531,38 @@ export async function updateTaskOrder(orderedIds: number[]) {
     return { error: "Failed to save task order" };
   }
 }
+
+export async function updateTaskSectionAndOrder(id: number, newSection: DaySection, orderedIds: number[]) {
+  try {
+    await ensureDb();
+    const userId = await requireUser();
+    const isOwner = await verifyTaskOwnership(id, userId);
+    if (!isOwner) {
+      return { error: "Unauthorized: You can only modify your own tasks" };
+    }
+
+    await sql`
+      UPDATE todos
+      SET day_section = ${newSection}
+      WHERE id = ${id} AND user_id = ${userId}
+    `;
+
+    for (let index = 0; index < orderedIds.length; index++) {
+      await sql`
+        UPDATE todos 
+        SET sort_order = ${index + 1} 
+        WHERE id = ${orderedIds[index]} AND user_id = ${userId}
+      `;
+    }
+    revalidatePath("/");
+    revalidatePath("/edit-tasks");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update task section and order:", error);
+    return { error: "Failed to save task section update" };
+  }
+}
+
 
 export async function editTodo(
   id: number,

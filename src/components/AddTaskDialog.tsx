@@ -31,6 +31,7 @@ export function AddTaskDialog() {
   const [selectedDays, setSelectedDays] = useState<string[]>(["everyday"]);
   const [initialValue, setInitialValue] = useState("");
   const [category, setCategory] = useState("Personal");
+  const [daySection, setDaySection] = useState<string>("MORNING");
   const [isPending, startTransition] = useTransition();
 
   const timeOptions = generate15MinTimeOptions();
@@ -90,6 +91,7 @@ export function AddTaskDialog() {
         type_value: initialValue || (taskType === "time" ? timeOptions[0] : ""),
         assigned_day: assignedDayValue,
         category,
+        day_section: daySection,
       });
 
       setTitle("");
@@ -97,6 +99,7 @@ export function AddTaskDialog() {
       setSelectedDays(["everyday"]);
       setInitialValue("");
       setCategory("Personal");
+      setDaySection("MORNING");
       setOpen(false);
     });
   };
@@ -137,7 +140,24 @@ export function AddTaskDialog() {
             />
           </div>
 
+          {/* Day Section */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-foreground">Day Section</Label>
+            <Select value={daySection} onValueChange={(val) => val && setDaySection(val)}>
+              <SelectTrigger className="w-full bg-background border-input text-foreground">
+                <SelectValue placeholder="Select Section" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border-border text-popover-foreground">
+                <SelectItem value="MORNING">🌅 Morning</SelectItem>
+                <SelectItem value="AFTERNOON">☀️ Afternoon</SelectItem>
+                <SelectItem value="EVENING">🌆 Evening</SelectItem>
+                <SelectItem value="NIGHT">🌙 Night</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <TaskCategoryPicker category={category} onChange={setCategory} />
+
 
           {/* Repeat Days (Alarm Style Multi-Select) */}
           <div className="space-y-2">

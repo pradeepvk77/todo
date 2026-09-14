@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Todo } from "@/lib/db";
+import { Todo, DaySection } from "@/lib/db";
 import { TaskWidget } from "@/components/TaskWidget";
 import { formatAssignedDays } from "@/lib/time-utils";
-import { HeartHandshake, Lock, Calendar } from "lucide-react";
+import { HeartHandshake, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { TaskFilter, TaskFilters } from "@/components/TaskFilters";
 
 interface YouTodoListProps {
@@ -15,20 +14,27 @@ interface YouTodoListProps {
   otherUserLabel: string;
 }
 
+const SECTIONS: { key: DaySection; label: string; icon: string }[] = [
+  { key: "MORNING", label: "Morning", icon: "🌅" },
+  { key: "AFTERNOON", label: "Afternoon", icon: "☀️" },
+  { key: "EVENING", label: "Evening", icon: "🌆" },
+  { key: "NIGHT", label: "Night", icon: "🌙" },
+];
+
 export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
   const [filter, setFilter] = useState<TaskFilter>("all");
   if (todos.length === 0) {
     return (
-      <Card className="border border-border bg-card p-8 text-center shadow-xs rounded-xl">
-        <CardContent className="space-y-3 pt-4">
-          <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto text-muted-foreground border border-border">
-            <HeartHandshake className="w-6 h-6 text-primary" />
+      <Card className="border border-border/80 bg-card p-6 text-center shadow-2xs rounded-xl">
+        <CardContent className="space-y-2.5 p-0">
+          <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center mx-auto text-muted-foreground border border-border/60">
+            <HeartHandshake className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-card-foreground">
+            <h3 className="text-sm font-semibold text-card-foreground">
               {otherUserLabel} has no tasks scheduled today
             </h3>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-0.5">
               Tasks created by {otherUserLabel} will appear here in real-time.
             </p>
           </div>
@@ -44,44 +50,90 @@ export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
   return (
     <div className="space-y-4">
       <TaskFilters value={filter} onChange={setFilter} total={todos.length} pending={pendingCount} completed={completedCount} />
-      {visibleTodos.length === 0 ? <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">No {filter} tasks for today.</p> : <div className="space-y-2.5">
-      {visibleTodos.map((todo) => {
-        const isCompleted = todo.completed;
+      {visibleTodos.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border/70 px-4 py-6 text-center text-xs text-muted-foreground">
+          No {filter} tasks for today.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {SECTIONS.map((sec) => {
+            const sectionTodos = visibleTodos.filter(
+              (t) => (t.day_section || "MORNING") === sec.key
+            );
 
-        return (
-          <Card
-            key={todo.id}
-            className={`border border-border bg-card rounded-xl shadow-xs transition-opacity ${
-              isCompleted ? "opacity-60" : ""
-            }`}
-          >
-            <CardContent className="p-3 sm:p-3.5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <Checkbox checked={isCompleted} disabled className="cursor-not-allowed opacity-70" />
-
-                <div className="min-w-0 flex-1 flex flex-col justify-center">
-                  <span
-                    className={`text-card-foreground text-sm font-semibold truncate ${
-                      isCompleted ? "line-through text-muted-foreground" : ""
-                    }`}
-                  >
-                    {todo.title}
-                  </span>
-                  <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 mt-0.5">
-                    <Calendar className="w-2.5 h-2.5 text-primary" />
-                    <span>{formatAssignedDays(todo.assigned_day)}</span>
+            return (
+              <div key={sec.key} className="space-y-1.5">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <span>{sec.icon}</span>
+                    <span>{sec.label}</span>
+                  </h3>
+                  <span className="text-[11px] font-semibold text-muted-foreground/75 bg-muted/60 px-2 py-0.5 rounded-full border border-border/40">
+                    {sectionTodos.length}
                   </span>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <TaskWidget todo={todo} isCompleted={isCompleted} readOnly={true} />
+                <div
+                  className={`min-h-[44px] rounded-xl border border-border/80 bg-card shadow-2xs ${
+                    sectionTodos.length > 0 ? "divide-y divide-border/60 overflow-hidden" : "p-3 text-center"
+                  }`}
+                >
+                  {sectionTodos.length === 0 ? (
+                    <p className="text-xs text-muted-foreground/60 font-medium py-1">
+                      No {sec.label.toLowerCase()} tasks
+                    </p>
+                  ) : (
+                    sectionTodos.map((todo) => {
+                      const isCompleted = todo.completed;
+
+                      return (
+                        <div
+                          key={todo.id}
+                          className={[
+                            "px-3 py-2.5 sm:px-3.5 flex items-center justify-between gap-3 transition-colors",
+                            isCompleted
+                              ? "bg-muted/30"
+                              : "bg-card hover:bg-muted/20",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                            <Checkbox checked={isCompleted} disabled className="h-4.5 w-4.5 rounded-md border-border shrink-0 cursor-not-allowed opacity-70" />
+
+                            <div className="min-w-0 flex-1 flex flex-col justify-center">
+                              <span
+                                className={`text-xs sm:text-sm truncate transition-colors ${
+                                  isCompleted
+                                    ? "line-through text-muted-foreground/70 font-normal"
+                                    : "text-foreground font-semibold"
+                                }`}
+                              >
+                                {todo.title}
+                              </span>
+                              <span className="text-[10px] font-medium text-muted-foreground/75 flex items-center gap-1 mt-0.5">
+                                <Calendar className="w-2.5 h-2.5 text-primary/60 inline shrink-0" />
+                                <span>{formatAssignedDays(todo.assigned_day)}</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <TaskWidget todo={todo} isCompleted={isCompleted} readOnly={true} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        );
-      })}
-      </div>}
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
+
+
+

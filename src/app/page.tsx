@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { TodoList } from "@/components/TodoList";
 import { YouTodoList } from "@/components/YouTodoList";
 import { Greeting } from "@/components/Greeting";
+import { StatsCard } from "@/components/StatsCard";
 import { Calendar } from "lucide-react";
 import { TaskMenu } from "@/components/TaskMenu";
 import { DailyQuote } from "@/components/DailyQuote";
@@ -32,53 +33,59 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ u
   const formattedDay = todayDay.charAt(0).toUpperCase() + todayDay.slice(1);
 
   return (
-    <main className="min-h-screen py-10 px-4 sm:px-6 w-full max-w-xl mx-auto">
-      {/* Top Header */}
-      <header className="mb-8 pb-6 border-b border-border w-full space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <Greeting />
-        </div>
+    <main className="min-h-screen py-5 sm:py-6 px-4 sm:px-6 w-full max-w-xl mx-auto space-y-3.5 sm:space-y-4">
+      {/* SECTION 1 — PERSONAL DAILY HEADER */}
+      <header className="flex items-center justify-between gap-4 pb-3 border-b border-border/70 w-full">
+        <Greeting />
+        <TaskMenu otherUserName={otherUserName} otherUser={viewingOtherUser} />
       </header>
 
-      <div className="space-y-6">
-        {!viewingOtherUser && <DailyQuote />}
-        {!viewingOtherUser ? (
-          <>
-          <div className="flex items-center justify-between pb-2 w-full">
+      {/* SECTION 2 — DAILY PROGRESS */}
+      {!viewingOtherUser ? (
+        <StatsCard todos={myTodos} />
+      ) : (
+        <StatsCard todos={otherData.todos} />
+      )}
+
+      {/* SECTION 3 — MOTIVATIONAL QUOTE */}
+      {!viewingOtherUser && <DailyQuote />}
+
+      {/* SECTION 4 & 5 — TASK SUMMARY, FILTERS AND TASK LIST */}
+      {!viewingOtherUser ? (
+        <div className="space-y-3 pt-0.5">
+          <div className="flex items-center justify-between w-full">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
                 <span>My Tasks</span>
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-primary inline" />
-                <span>{myTodos.length} {myTodos.length === 1 ? "task" : "tasks"} scheduled for {formattedDay} (IST)</span>
+                <Calendar className="w-3 h-3 text-primary inline shrink-0" />
+                <span>{myTodos.length} scheduled today ({formattedDay})</span>
               </p>
             </div>
-
-            <TaskMenu otherUserName={otherUserName} />
           </div>
 
           <TodoList initialTodos={myTodos} />
-          </>
-        ) : (
-          <>
-          <div className="flex items-center justify-between pb-2 w-full">
+        </div>
+      ) : (
+        <div className="space-y-3 pt-0.5">
+          <div className="flex items-center justify-between w-full">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+              <h2 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
                 {`${otherUserName}'s Tasks`}
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-primary inline" />
-                <span>{otherData.todos.length} {otherData.todos.length === 1 ? "task" : "tasks"} scheduled for {formattedDay} (IST)</span>
+                <Calendar className="w-3 h-3 text-primary inline shrink-0" />
+                <span>{otherData.todos.length} scheduled today ({formattedDay})</span>
               </p>
             </div>
-            <TaskMenu otherUser otherUserName={otherUserName} />
           </div>
 
           <YouTodoList todos={otherData.todos} otherUserLabel={otherUserName} />
-          </>
-        )}
-      </div>
+        </div>
+      )}
     </main>
   );
 }
+
+

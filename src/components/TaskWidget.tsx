@@ -14,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 
 interface TaskWidgetProps {
   todo: Todo;
@@ -42,10 +41,10 @@ export function TaskWidget({ todo, isCompleted, readOnly = false }: TaskWidgetPr
     const defaultTime = val || timeOptions[0];
 
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <Select value={defaultTime} onValueChange={handleValueChange} disabled={readOnly || isPending || isCompleted}>
-          <SelectTrigger className="h-8 w-32 text-xs font-medium border-border bg-background text-foreground rounded-md disabled:opacity-60 disabled:cursor-not-allowed">
-            <Clock className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
+          <SelectTrigger className="h-7 w-28 sm:w-32 text-xs font-medium border-border/80 bg-background text-foreground rounded-lg disabled:opacity-60 disabled:cursor-not-allowed px-2.5">
+            <Clock className="w-3 h-3 mr-1 text-muted-foreground shrink-0" />
             <SelectValue placeholder="Select Time" />
           </SelectTrigger>
           <SelectContent className="max-h-48 bg-popover border-border text-popover-foreground">
@@ -76,18 +75,18 @@ export function TaskWidget({ todo, isCompleted, readOnly = false }: TaskWidgetPr
     };
 
     return (
-      <div className="flex items-center gap-1 bg-muted p-0.5 rounded-md border border-border">
+      <div className="flex items-center gap-0.5 bg-muted/70 p-0.5 rounded-lg border border-border/70">
         <Button
           type="button"
           variant="ghost"
           size="icon"
           onClick={handleDecrement}
           disabled={readOnly || isPending || isCompleted || num <= 0}
-          className="h-6 w-6 rounded text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-5 w-5 rounded text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Minus className="w-3 h-3" />
         </Button>
-        <span className="px-2 text-xs font-bold text-foreground min-w-[1.5rem] text-center">
+        <span className="px-1.5 text-xs font-bold text-foreground min-w-[1.25rem] text-center">
           {num}
         </span>
         <Button
@@ -96,7 +95,7 @@ export function TaskWidget({ todo, isCompleted, readOnly = false }: TaskWidgetPr
           size="icon"
           onClick={handleIncrement}
           disabled={readOnly || isPending || isCompleted}
-          className="h-6 w-6 rounded text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-5 w-5 rounded text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Plus className="w-3 h-3" />
         </Button>
@@ -106,7 +105,7 @@ export function TaskWidget({ todo, isCompleted, readOnly = false }: TaskWidgetPr
 
   if (todo.task_type === "input") {
     return (
-      <div className="flex items-center gap-2 max-w-30">
+      <div className="flex items-center gap-2 max-w-28 sm:max-w-32">
         <Input
           type="text"
           value={val}
@@ -115,16 +114,13 @@ export function TaskWidget({ todo, isCompleted, readOnly = false }: TaskWidgetPr
           placeholder="Note..."
           disabled={readOnly || isCompleted}
           readOnly={readOnly}
-          className="h-8 text-xs bg-background border-input text-foreground rounded-md disabled:opacity-60 disabled:cursor-not-allowed"
+          className="h-7 text-xs bg-background border-input text-foreground rounded-lg disabled:opacity-60 disabled:cursor-not-allowed px-2.5"
         />
       </div>
     );
   }
 
-  // Checkbox type default fallback badge
-  return (
-    <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">
-      Task
-    </Badge>
-  );
+  // Checkbox type default fallback - clean subtle label if needed
+  return null;
 }
+

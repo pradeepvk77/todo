@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Todo } from "@/lib/db";
-import { toggleTodo, updateTaskOrder } from "@/app/actions";
+import { Todo, DaySection } from "@/lib/db";
+import { toggleTodo, updateTaskSectionAndOrder, updateTaskOrder } from "@/app/actions";
 import { TaskWidget } from "@/components/TaskWidget";
 import { formatAssignedDays } from "@/lib/time-utils";
 import { GripVertical, CheckSquare, Calendar } from "lucide-react";
@@ -19,6 +19,13 @@ import {
 interface TodoListProps {
   initialTodos: Todo[];
 }
+
+const SECTIONS: { key: DaySection; label: string; icon: string }[] = [
+  { key: "MORNING", label: "Morning", icon: "🌅" },
+  { key: "AFTERNOON", label: "Afternoon", icon: "☀️" },
+  { key: "EVENING", label: "Evening", icon: "🌆" },
+  { key: "NIGHT", label: "Night", icon: "🌙" },
+];
 
 export function TodoList({ initialTodos }: TodoListProps) {
   const [todos, setTodos] = useState<Todo[]>(initialTodos);
@@ -48,31 +55,69 @@ export function TodoList({ initialTodos }: TodoListProps) {
 
   const handleDragEnd = (result: DropResult) => {
     if (filter !== "all") return;
-    if (!result.destination) return;
-    if (result.destination.index === result.source.index) return;
+    const { destination, source, draggableId } = result;
+    if (!destination) return;
 
-    const items = Array.from(todos);
-    const [moved] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, moved);
-    setTodos(items);
+    const sourceSection = source.droppableId as DaySection;
+    const destSection = destination.droppableId as DaySection;
+    const destIndex = destination.index;
+    const taskId = parseInt(draggableId, 10);
 
-    const orderedIds = items.map((item) => item.id);
-    startTransition(async () => {
-      await updateTaskOrder(orderedIds);
+    if (sourceSection === destSection && source.index === destIndex) {
+      return;
+    }
+
+    setTodos((prevTodos) => {
+      const updatedTodos = prevTodos.map((t) =>
+        t.id === taskId ? { ...t, day_section: destSection } : t
+      );
+
+      const groups: Record<DaySection, Todo[]> = {
+        MORNING: [],
+        AFTERNOON: [],
+        EVENING: [],
+        NIGHT: [],
+      };
+
+      updatedTodos.forEach((t) => {
+        const sec = t.day_section && groups[t.day_section] ? t.day_section : "MORNING";
+        groups[sec].push(t);
+      });
+
+      const destList = Array.from(groups[destSection]);
+      const movedItemIndex = destList.findIndex((t) => t.id === taskId);
+      if (movedItemIndex !== -1) {
+        const [movedItem] = destList.splice(movedItemIndex, 1);
+        destList.splice(destIndex, 0, movedItem);
+        groups[destSection] = destList;
+      }
+
+      const newOrderedTodos = SECTIONS.flatMap((sec) => groups[sec.key]);
+      const orderedIds = newOrderedTodos.map((t) => t.id);
+
+      startTransition(async () => {
+        if (sourceSection !== destSection) {
+          await updateTaskSectionAndOrder(taskId, destSection, orderedIds);
+        } else {
+          await updateTaskOrder(orderedIds);
+        }
+      });
+
+      return newOrderedTodos;
     });
   };
 
   if (todos.length === 0) {
     return (
-      <Card className="border border-border bg-card p-8 text-center shadow-xs rounded-xl">
-        <CardContent className="space-y-3 pt-4">
-          <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto text-muted-foreground border border-border">
-            <CheckSquare className="w-6 h-6" />
+      <Card className="border border-border/80 bg-card p-6 text-center shadow-2xs rounded-xl">
+        <CardContent className="space-y-2.5 p-0">
+          <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center mx-auto text-muted-foreground border border-border/60">
+            <CheckSquare className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-card-foreground">No tasks scheduled for today</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              Click the <strong className="text-foreground font-medium">Edit Tasks</strong> button above to add or manage tasks.
+            <h3 className="text-sm font-semibold text-card-foreground">No tasks scheduled for today</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Click the <strong className="text-foreground font-medium">Edit tasks</strong> option in the menu above to add tasks.
             </p>
           </div>
         </CardContent>
@@ -87,80 +132,133 @@ export function TodoList({ initialTodos }: TodoListProps) {
   return (
     <div className="space-y-4">
       <TaskFilters value={filter} onChange={setFilter} total={todos.length} pending={pendingCount} completed={completedCount} />
-      {visibleTodos.length === 0 ? <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">No {filter} tasks for today.</p> : <DragDropContext onDragEnd={handleDragEnd}>
-      <Droppable droppableId="todo-list">
-        {(provided) => (
-          <div
-            ref={provided.innerRef}
-            {...provided.droppableProps}
-          >
-            {visibleTodos.map((todo, index) => {
-              const isCompleted = todo.completed;
-              const isToggling = togglingId === todo.id;
+      {visibleTodos.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border/70 px-4 py-6 text-center text-xs text-muted-foreground">
+          No {filter} tasks for today.
+        </p>
+      ) : (
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <div className="space-y-4">
+            {SECTIONS.map((sec) => {
+              const sectionTodos = visibleTodos.filter(
+                (t) => (t.day_section || "MORNING") === sec.key
+              );
 
               return (
-                <Draggable
-                  key={todo.id.toString()}
-                  draggableId={todo.id.toString()}
-                  index={index}
-                  isDragDisabled={filter !== "all"}
-                >
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      style={provided.draggableProps.style}
-                      className="pb-2.5"
-                    >
-                      <Card
+                <div key={sec.key} className="space-y-1.5">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <span>{sec.icon}</span>
+                      <span>{sec.label}</span>
+                    </h3>
+                    <span className="text-[11px] font-semibold text-muted-foreground/75 bg-muted/60 px-2 py-0.5 rounded-full border border-border/40">
+                      {sectionTodos.length}
+                    </span>
+                  </div>
+
+                  <Droppable droppableId={sec.key}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
                         className={[
-                          "border border-border bg-card rounded-xl shadow-xs",
-                          isCompleted ? "opacity-60" : "",
-                          snapshot.isDragging ? "shadow-md ring-1 ring-border" : "",
+                          "min-h-[44px] rounded-xl border transition-colors",
+                          snapshot.isDraggingOver
+                            ? "border-primary/50 bg-primary/5"
+                            : "border-border/80 bg-card shadow-2xs",
+                          sectionTodos.length > 0 ? "divide-y divide-border/60 overflow-hidden" : "p-3 text-center",
                         ]
                           .filter(Boolean)
                           .join(" ")}
                       >
-                        <CardContent className="p-3 sm:p-3.5 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            {filter === "all" && <div {...provided.dragHandleProps} className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1 rounded flex-shrink-0"><GripVertical className="w-4 h-4" /></div>}
+                        {sectionTodos.length === 0 ? (
+                          <p className="text-xs text-muted-foreground/60 font-medium py-1">
+                            No {sec.label.toLowerCase()} tasks — drag tasks here
+                          </p>
+                        ) : (
+                          sectionTodos.map((todo, index) => {
+                            const isCompleted = todo.completed;
+                            const isToggling = togglingId === todo.id;
 
-                            <Checkbox
-                              checked={isCompleted}
-                              onCheckedChange={() => handleToggle(todo.id, isCompleted)}
-                              disabled={isToggling}
-                            />
-
-                            <div className="min-w-0 flex-1 flex flex-col justify-center">
-                              <span
-                                className={`text-card-foreground text-sm font-semibold truncate ${
-                                  isCompleted ? "line-through text-muted-foreground" : ""
-                                }`}
+                            return (
+                              <Draggable
+                                key={todo.id.toString()}
+                                draggableId={todo.id.toString()}
+                                index={index}
+                                isDragDisabled={filter !== "all"}
                               >
-                                {todo.title}
-                              </span>
-                              <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 mt-0.5">
-                                <Calendar className="w-2.5 h-2.5 text-primary" />
-                                <span>{formatAssignedDays(todo.assigned_day)}</span>
-                              </span>
-                            </div>
-                          </div>
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    style={provided.draggableProps.style}
+                                    className={[
+                                      "px-3 py-2.5 sm:px-3.5 flex items-center justify-between gap-3 transition-colors",
+                                      isCompleted
+                                        ? "bg-muted/30"
+                                        : "bg-card hover:bg-muted/20",
+                                      snapshot.isDragging ? "shadow-md ring-1 ring-primary/20 bg-background" : "",
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" ")}
+                                  >
+                                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                      {filter === "all" && (
+                                        <div
+                                          {...provided.dragHandleProps}
+                                          className="text-muted-foreground/50 hover:text-foreground cursor-grab active:cursor-grabbing p-0.5 rounded shrink-0"
+                                          title="Drag to reorder or move section"
+                                        >
+                                          <GripVertical className="w-4 h-4" />
+                                        </div>
+                                      )}
 
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <TaskWidget todo={todo} isCompleted={isCompleted} />
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                </Draggable>
+                                      <Checkbox
+                                        checked={isCompleted}
+                                        onCheckedChange={() => handleToggle(todo.id, isCompleted)}
+                                        disabled={isToggling}
+                                        className="h-4.5 w-4.5 rounded-md border-border shrink-0 transition-transform active:scale-90"
+                                      />
+
+                                      <div className="min-w-0 flex-1 flex flex-col justify-center">
+                                        <span
+                                          className={`text-xs sm:text-sm truncate transition-colors ${
+                                            isCompleted
+                                              ? "line-through text-muted-foreground/70 font-normal"
+                                              : "text-foreground font-semibold"
+                                          }`}
+                                        >
+                                          {todo.title}
+                                        </span>
+                                        <span className="text-[10px] font-medium text-muted-foreground/75 flex items-center gap-1 mt-0.5">
+                                          <Calendar className="w-2.5 h-2.5 text-primary/60 inline shrink-0" />
+                                          <span>{formatAssignedDays(todo.assigned_day)}</span>
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <TaskWidget todo={todo} isCompleted={isCompleted} />
+                                    </div>
+                                  </div>
+                                )}
+                              </Draggable>
+                            );
+                          })
+                        )}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
               );
             })}
-            {provided.placeholder}
           </div>
-        )}
-      </Droppable>
-    </DragDropContext>}
+        </DragDropContext>
+      )}
     </div>
   );
 }
+
+
+

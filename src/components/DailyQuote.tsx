@@ -14,10 +14,10 @@ const fallbackQuote: QuoteItem = {
 const emptySubscribe = () => () => {};
 
 const timeOfDayStyles = {
-  morning: { image: "/morning.png", overlay: "bg-white/20", text: "text-slate-950", mutedText: "text-slate-700" },
-  afternoon: { image: "/afternoon.png", overlay: "bg-white/20", text: "text-slate-950", mutedText: "text-slate-700" },
-  evening: { image: "/evening.png", overlay: "bg-slate-950/20", text: "text-white", mutedText: "text-white/85" },
-  night: { image: "/night.png", overlay: "bg-slate-950/35", text: "text-white", mutedText: "text-white/85" },
+  morning: { image: "/morning.png", overlay: "bg-white/50 backdrop-blur-xs", text: "text-slate-950", authorText: "text-slate-700 font-medium" },
+  afternoon: { image: "/afternoon.png", overlay: "bg-white/50 backdrop-blur-xs", text: "text-slate-950", authorText: "text-slate-700 font-medium" },
+  evening: { image: "/evening.png", overlay: "bg-slate-950/50 backdrop-blur-xs", text: "text-white", authorText: "text-white/90 font-medium" },
+  night: { image: "/night.png", overlay: "bg-slate-950/60 backdrop-blur-xs", text: "text-white", authorText: "text-white/90 font-medium" },
 };
 
 type TimeOfDay = keyof typeof timeOfDayStyles;
@@ -63,7 +63,6 @@ export function DailyQuote() {
 
   useEffect(() => {
     const loadQuotes = async () => {
-      // Defer cache hydration so the server fallback and first client render match.
       await Promise.resolve();
       const cachedQuotes = readStoredQuotes();
       if (cachedQuotes) {
@@ -88,16 +87,23 @@ export function DailyQuote() {
   }, []);
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-border p-5 shadow-xs sm:px-7" style={{ backgroundImage: `url(${background.image})`, backgroundPosition: "center", backgroundSize: "cover" }}>
+    <section className="relative overflow-hidden rounded-xl border border-border/80 p-3.5 sm:p-4 shadow-2xs" style={{ backgroundImage: `url(${background.image})`, backgroundPosition: "center", backgroundSize: "cover" }}>
       <div className={`absolute inset-0 ${background.overlay}`} />
-      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 gap-4">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/70 text-orange-600 shadow-xs"><Quote className="size-4" /></div>
-          <div className="min-w-0">
-            <p className={`font-serif text-base font-semibold italic leading-snug ${background.text} sm:text-lg`}>“{quote.text}&quot; <span className={`mt-1 text-xs ${background.mutedText}`}>— {quote.author}</span></p>
-          </div>
+      <div className="relative flex items-start gap-3">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-background/80 text-foreground shadow-2xs border border-border/40 mt-0.5">
+          <Quote className="size-3.5 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className={`font-serif text-sm sm:text-base font-medium italic leading-snug ${background.text}`}>
+            “{quote.text}”
+          </p>
+          <p className={`mt-1 text-xs ${background.authorText}`}>
+            — {quote.author}
+          </p>
         </div>
       </div>
     </section>
   );
 }
+
+

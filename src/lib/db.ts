@@ -1,6 +1,8 @@
 import { neon } from "@neondatabase/serverless";
 import { AssignedDay } from "./time-utils";
 
+export type DaySection = "MORNING" | "AFTERNOON" | "EVENING" | "NIGHT";
+
 export interface Todo {
   id: number;
   user_id: string;
@@ -11,8 +13,25 @@ export interface Todo {
   type_value: string;
   sort_order: number;
   assigned_day: AssignedDay;
+  day_section: DaySection;
   last_reset_date: string;
   created_at: string;
+}
+
+export function normalizeDaySection(daySection?: string | null, title?: string): DaySection {
+  const validSections: DaySection[] = ["MORNING", "AFTERNOON", "EVENING", "NIGHT"];
+  if (daySection) {
+    const upper = daySection.toUpperCase() as DaySection;
+    if (validSections.includes(upper)) return upper;
+  }
+  if (title) {
+    const lower = title.toLowerCase();
+    if (lower.includes("breakfast") || lower.includes("wake") || lower.includes("morning")) return "MORNING";
+    if (lower.includes("lunch") || lower.includes("afternoon")) return "AFTERNOON";
+    if (lower.includes("evening") || lower.includes("walk") || lower.includes("dinner")) return "EVENING";
+    if (lower.includes("night") || lower.includes("sleep") || lower.includes("bedtime")) return "NIGHT";
+  }
+  return "MORNING";
 }
 
 if (!process.env.DATABASE_URL) {
@@ -34,6 +53,7 @@ export async function initDb() {
       type_value      TEXT    DEFAULT '',
       sort_order      INTEGER DEFAULT 0,
       assigned_day    TEXT    DEFAULT 'everyday',
+      day_section     TEXT    DEFAULT 'MORNING',
       last_reset_date TEXT    DEFAULT '',
       created_at      TIMESTAMPTZ DEFAULT NOW()
     )
@@ -43,6 +63,9 @@ export async function initDb() {
   `;
   await sql`
     ALTER TABLE todos ADD COLUMN IF NOT EXISTS assigned_day TEXT DEFAULT 'everyday'
+  `;
+  await sql`
+    ALTER TABLE todos ADD COLUMN IF NOT EXISTS day_section TEXT DEFAULT 'MORNING'
   `;
   await sql`
     ALTER TABLE todos ADD COLUMN IF NOT EXISTS last_reset_date TEXT DEFAULT ''
@@ -89,3 +112,4 @@ export async function initDb() {
     )
   `;
 }
+

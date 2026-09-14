@@ -20,22 +20,35 @@ export function TaskFilters({
   ];
 
   return (
-    <div className="flex flex-wrap gap-2" aria-label="Filter tasks">
-      {filters.map((filter) => (
-        <button
-          key={filter.value}
-          type="button"
-          onClick={() => onChange(filter.value)}
-          aria-pressed={value === filter.value}
-          className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-            value === filter.value
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
-        >
-          {filter.label} <span className={`ml-1 rounded-full px-1.5 py-0.5 text-xs ${value === filter.value ? "bg-primary-foreground/15" : "bg-muted"}`}>{filter.count}</span>
-        </button>
-      ))}
+    <div className="flex flex-wrap items-center gap-1.5" aria-label="Filter tasks">
+      {filters.map((filter) => {
+        const isActive = value === filter.value;
+        return (
+          <button
+            key={filter.value}
+            type="button"
+            onClick={() => onChange(filter.value)}
+            aria-pressed={isActive}
+            className={`cursor-pointer inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
+              isActive
+                ? "bg-primary text-primary-foreground shadow-2xs"
+                : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <span>{filter.label}</span>
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                isActive
+                  ? "bg-primary-foreground/20 text-primary-foreground"
+                  : "bg-background/80 text-muted-foreground border border-border/50"
+              }`}
+            >
+              {filter.count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
+

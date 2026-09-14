@@ -17,7 +17,7 @@ function getClientTimeData() {
     greeting: getGreeting(now.getHours()),
     formattedDate: now.toLocaleDateString("en-US", {
       weekday: "long",
-      month: "short",
+      month: "long",
       day: "numeric",
       year: "numeric",
     }),
@@ -34,19 +34,20 @@ export function Greeting() {
   const timeData = isMounted ? getClientTimeData() : null;
 
   return (
-    <div className="flex min-w-0 items-center gap-3">
-      <div className="p-3 bg-primary text-primary-foreground rounded-lg shadow-xs flex-shrink-0">
-        <CheckSquare className="w-6 h-6" />
+    <div className="flex items-center gap-3">
+      <div className="p-2.5 bg-primary/10 text-primary rounded-xl flex-shrink-0 border border-primary/15">
+        <CheckSquare className="w-5 h-5" />
       </div>
       <div>
-        <h1 className="whitespace-nowrap text-xl font-bold tracking-tight text-foreground sm:text-3xl">
+        <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
           {timeData ? `${timeData.greeting.text} ${timeData.greeting.emoji}` : "Hello 👋"}
         </h1>
-        <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground mt-1">
-          <Calendar className="w-3.5 h-3.5" />
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+          <Calendar className="w-3.5 h-3.5 text-muted-foreground/70" />
           <span>{timeData?.formattedDate ?? ""}</span>
         </div>
       </div>
     </div>
   );
 }
+
