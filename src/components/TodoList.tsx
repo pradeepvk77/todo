@@ -5,7 +5,7 @@ import { Todo, DaySection } from "@/lib/db";
 import { toggleTodo, updateTaskSectionAndOrder, updateTaskOrder } from "@/app/actions";
 import { TaskWidget } from "@/components/TaskWidget";
 import { formatAssignedDays } from "@/lib/time-utils";
-import { GripVertical, CheckSquare, Calendar } from "lucide-react";
+import { GripVertical, CheckSquare, Calendar, CheckCircle2, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TaskFilter, TaskFilters } from "@/components/TaskFilters";
@@ -27,6 +27,13 @@ const SECTIONS: { key: DaySection; label: string; icon: string }[] = [
   { key: "NIGHT", label: "Night", icon: "🌙" },
 ];
 
+const SECTION_INFO: Record<DaySection, { label: string; icon: string }> = {
+  MORNING: { label: "Morning", icon: "🌅" },
+  AFTERNOON: { label: "Afternoon", icon: "☀️" },
+  EVENING: { label: "Evening", icon: "🌆" },
+  NIGHT: { label: "Night", icon: "🌙" },
+};
+
 const emptySubscribe = () => () => {};
 
 function getCurrentDaySection(): DaySection {
@@ -44,10 +51,85 @@ function getCurrentDaySection(): DaySection {
   return "NIGHT";
 }
 
+interface NextGuidance {
+  type: "next_task" | "section_complete" | "all_complete" | "none";
+  nextTask?: Todo;
+  nextSectionKey?: DaySection;
+  nextSectionLabel?: string;
+  nextSectionIcon?: string;
+  completedSectionLabel?: string;
+  completedSectionIcon?: string;
+  completedSectionTotal?: number;
+}
+
+function calculateNextGuidance(todos: Todo[], lastCompletedId?: number | null): NextGuidance {
+  const totalCount = todos.length;
+  if (totalCount === 0) return { type: "none" };
+
+  const completedCount = todos.filter((t) => t.completed).length;
+  if (completedCount === totalCount) {
+    return { type: "all_complete" };
+  }
+
+  const pendingTodos = todos.filter((t) => !t.completed);
+  if (pendingTodos.length === 0) return { type: "all_complete" };
+
+  const lastCompletedTask = lastCompletedId ? todos.find((t) => t.id === lastCompletedId) : null;
+  const targetSection: DaySection = lastCompletedTask?.day_section || "MORNING";
+  const SECTION_ORDER: DaySection[] = ["MORNING", "AFTERNOON", "EVENING", "NIGHT"];
+
+  // Priority 1: Next pending task in the same section
+  const sameSectionPending = pendingTodos.filter((t) => (t.day_section || "MORNING") === targetSection);
+  if (sameSectionPending.length > 0) {
+    return {
+      type: "next_task",
+      nextTask: sameSectionPending[0],
+      nextSectionKey: targetSection,
+      nextSectionLabel: SECTION_INFO[targetSection].label,
+      nextSectionIcon: SECTION_INFO[targetSection].icon,
+    };
+  }
+
+  // Priority 2: Current section complete -> find next non-empty section in daily order
+  const targetSecIndex = SECTION_ORDER.indexOf(targetSection);
+  const targetSecTotal = todos.filter((t) => (t.day_section || "MORNING") === targetSection).length;
+
+  for (let i = 1; i <= 3; i++) {
+    const nextSecKey = SECTION_ORDER[(targetSecIndex + i) % 4];
+    const nextSecPending = pendingTodos.filter((t) => (t.day_section || "MORNING") === nextSecKey);
+
+    if (nextSecPending.length > 0) {
+      return {
+        type: "section_complete",
+        completedSectionLabel: SECTION_INFO[targetSection].label,
+        completedSectionIcon: SECTION_INFO[targetSection].icon,
+        completedSectionTotal: targetSecTotal,
+        nextTask: nextSecPending[0],
+        nextSectionKey: nextSecKey,
+        nextSectionLabel: SECTION_INFO[nextSecKey].label,
+        nextSectionIcon: SECTION_INFO[nextSecKey].icon,
+      };
+    }
+  }
+
+  // Priority 3: Fallback to first available pending task anywhere
+  const firstPending = pendingTodos[0];
+  const firstSec = firstPending.day_section || "MORNING";
+  return {
+    type: "next_task",
+    nextTask: firstPending,
+    nextSectionKey: firstSec,
+    nextSectionLabel: SECTION_INFO[firstSec].label,
+    nextSectionIcon: SECTION_INFO[firstSec].icon,
+  };
+}
+
 export function TodoList({ initialTodos }: TodoListProps) {
   const [todos, setTodos] = useState<Todo[]>(initialTodos);
   const [prevInitialTodos, setPrevInitialTodos] = useState<Todo[]>(initialTodos);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [lastCompletedId, setLastCompletedId] = useState<number | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskFilter>("all");
   const [, startTransition] = useTransition();
 
@@ -63,9 +145,22 @@ export function TodoList({ initialTodos }: TodoListProps) {
   }
 
   const handleToggle = (id: number, currentCompleted: boolean) => {
+    const targetTask = todos.find((t) => t.id === id);
+    const nextCompleted = !currentCompleted;
+
+    if (nextCompleted && targetTask) {
+      setLastCompletedId(id);
+      setToastMessage(`✓ ${targetTask.title} completed`);
+      setTimeout(() => {
+        setToastMessage((msg) => (msg === `✓ ${targetTask.title} completed` ? null : msg));
+      }, 2800);
+    } else {
+      setToastMessage(null);
+    }
+
     setTogglingId(id);
     setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: !currentCompleted } : t))
+      prev.map((t) => (t.id === id ? { ...t, completed: nextCompleted } : t))
     );
     startTransition(async () => {
       try {
@@ -151,10 +246,79 @@ export function TodoList({ initialTodos }: TodoListProps) {
   const pendingCount = todos.filter((todo) => !todo.completed).length;
   const completedCount = todos.length - pendingCount;
   const visibleTodos = todos.filter((todo) => filter === "all" || (filter === "completed" ? todo.completed : !todo.completed));
+  const guidance = calculateNextGuidance(todos, lastCompletedId);
 
   return (
     <div className="space-y-3">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+          <div className="bg-foreground text-background text-xs font-semibold px-3.5 py-2 rounded-full shadow-lg border border-border/20 flex items-center gap-2 animate-in fade-in-50 zoom-in-95 duration-200">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
+
       <TaskFilters value={filter} onChange={setFilter} total={todos.length} pending={pendingCount} completed={completedCount} />
+
+      {/* "What's Next?" & Completion Guidance Banner */}
+      {guidance.type === "all_complete" && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-center space-y-1 animate-in fade-in-50 duration-200">
+          <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="w-4 h-4" />
+            <span>Today&apos;s tasks are complete</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {todos.length} of {todos.length} completed. Nice work. Enjoy the rest of your day.
+          </p>
+        </div>
+      )}
+
+      {guidance.type === "section_complete" && guidance.nextTask && (
+        <div className="rounded-xl border border-border/80 bg-card p-2.5 px-3.5 shadow-2xs space-y-1.5 animate-in fade-in-50 duration-200">
+          <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+            <span className="flex items-center gap-1.5">
+              <span>{guidance.completedSectionIcon}</span>
+              <span>{guidance.completedSectionLabel} complete</span>
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              {guidance.completedSectionTotal} of {guidance.completedSectionTotal} completed
+            </span>
+          </div>
+          <div className="pt-1 border-t border-border/50 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-muted-foreground font-medium shrink-0">Next up</span>
+              <span className="text-xs font-semibold text-foreground truncate flex items-center gap-1">
+                <span>{guidance.nextSectionIcon}</span>
+                <span>{guidance.nextTask.title}</span>
+              </span>
+            </div>
+            <span className="text-[10px] font-semibold text-muted-foreground/80 shrink-0">
+              {guidance.nextSectionLabel}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {guidance.type === "next_task" && guidance.nextTask && (
+        <div className="rounded-xl border border-border/70 bg-card/60 p-2.5 px-3.5 flex items-center justify-between gap-3 text-xs animate-in fade-in-50 duration-200">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>Next up</span>
+            </span>
+            <span className="text-xs font-semibold text-foreground truncate flex items-center gap-1">
+              <span>{guidance.nextSectionIcon}</span>
+              <span>{guidance.nextTask.title}</span>
+            </span>
+          </div>
+          <span className="text-[10px] font-medium text-muted-foreground/80 bg-muted/60 px-2 py-0.5 rounded-md border border-border/50 shrink-0">
+            {guidance.nextSectionLabel}
+          </span>
+        </div>
+      )}
+
       {visibleTodos.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border/70 px-4 py-6 text-center text-xs text-muted-foreground">
           No {filter} tasks for today.
@@ -229,9 +393,9 @@ export function TodoList({ initialTodos }: TodoListProps) {
                                     {...provided.draggableProps}
                                     style={provided.draggableProps.style}
                                     className={[
-                                      "px-3 py-2 sm:px-3.5 flex items-center justify-between gap-3 transition-colors",
+                                      "px-3 py-2 sm:px-3.5 flex items-center justify-between gap-3 transition-all duration-300",
                                       isCompleted
-                                        ? "bg-muted/30"
+                                        ? "bg-muted/30 dark:bg-muted/15"
                                         : "bg-card hover:bg-muted/20",
                                       snapshot.isDragging ? "shadow-md ring-1 ring-primary/20 bg-background rounded-lg" : "",
                                     ]
@@ -253,14 +417,14 @@ export function TodoList({ initialTodos }: TodoListProps) {
                                         checked={isCompleted}
                                         onCheckedChange={() => handleToggle(todo.id, isCompleted)}
                                         disabled={isToggling}
-                                        className="h-4.5 w-4.5 rounded-md border-border shrink-0 transition-transform active:scale-90"
+                                        className="h-4.5 w-4.5 rounded-md border-border shrink-0 transition-transform duration-150 active:scale-90 cursor-pointer"
                                       />
 
                                       <div className="min-w-0 flex-1 flex flex-col justify-center">
                                         <span
-                                          className={`text-xs sm:text-sm truncate transition-colors ${
+                                          className={`text-xs sm:text-sm truncate transition-all duration-300 ${
                                             isCompleted
-                                              ? "line-through text-muted-foreground/70 font-normal"
+                                              ? "line-through text-muted-foreground/60 font-normal"
                                               : "text-foreground font-semibold"
                                           }`}
                                         >
@@ -295,6 +459,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
     </div>
   );
 }
+
 
 
 
