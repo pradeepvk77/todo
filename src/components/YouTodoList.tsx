@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Todo, DaySection } from "@/lib/db";
 import { TaskWidget } from "@/components/TaskWidget";
 import { formatAssignedDays } from "@/lib/time-utils";
@@ -21,8 +21,31 @@ const SECTIONS: { key: DaySection; label: string; icon: string }[] = [
   { key: "NIGHT", label: "Night", icon: "🌙" },
 ];
 
+const emptySubscribe = () => () => {};
+
+function getCurrentDaySection(): DaySection {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      hourCycle: "h23",
+      timeZone: "Asia/Kolkata",
+    }).format(new Date())
+  );
+
+  if (hour >= 5 && hour < 12) return "MORNING";
+  if (hour >= 12 && hour < 17) return "AFTERNOON";
+  if (hour >= 17 && hour < 20) return "EVENING";
+  return "NIGHT";
+}
+
 export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
   const [filter, setFilter] = useState<TaskFilter>("all");
+  const currentSection = useSyncExternalStore<DaySection>(
+    emptySubscribe,
+    getCurrentDaySection,
+    () => "MORNING"
+  );
+
   if (todos.length === 0) {
     return (
       <Card className="border border-border/80 bg-card p-6 text-center shadow-2xs rounded-xl">
@@ -48,38 +71,51 @@ export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
   const visibleTodos = todos.filter((todo) => filter === "all" || (filter === "completed" ? todo.completed : !todo.completed));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <TaskFilters value={filter} onChange={setFilter} total={todos.length} pending={pendingCount} completed={completedCount} />
       {visibleTodos.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border/70 px-4 py-6 text-center text-xs text-muted-foreground">
           No {filter} tasks for today.
         </p>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3.5 pt-1">
           {SECTIONS.map((sec) => {
             const sectionTodos = visibleTodos.filter(
               (t) => (t.day_section || "MORNING") === sec.key
             );
+            const sectionCompleted = sectionTodos.filter((t) => t.completed).length;
+            const sectionTotal = sectionTodos.length;
+            const isCurrentSection = currentSection === sec.key;
 
             return (
               <div key={sec.key} className="space-y-1.5">
-                <div className="flex items-center justify-between px-1">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <span>{sec.icon}</span>
-                    <span>{sec.label}</span>
-                  </h3>
-                  <span className="text-[11px] font-semibold text-muted-foreground/75 bg-muted/60 px-2 py-0.5 rounded-full border border-border/40">
-                    {sectionTodos.length}
+                <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/90 flex items-center gap-1.5">
+                      <span>{sec.icon}</span>
+                      <span>{sec.label}</span>
+                    </h3>
+                    {isCurrentSection && (
+                      <span className="text-[9px] font-extrabold tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 leading-none">
+                        NOW
+                      </span>
+                    )}
+                  </div>
+
+                  <span className="text-xs font-semibold text-muted-foreground/80">
+                    {sectionCompleted} / {sectionTotal}
                   </span>
                 </div>
 
                 <div
-                  className={`min-h-[44px] rounded-xl border border-border/80 bg-card shadow-2xs ${
-                    sectionTodos.length > 0 ? "divide-y divide-border/60 overflow-hidden" : "p-3 text-center"
-                  }`}
+                  className={
+                    sectionTotal > 0
+                      ? "rounded-xl border border-border/80 bg-card shadow-2xs divide-y divide-border/60 overflow-hidden"
+                      : "min-h-[38px] rounded-lg border border-dashed border-border/50 bg-muted/15 flex items-center justify-center p-2"
+                  }
                 >
-                  {sectionTodos.length === 0 ? (
-                    <p className="text-xs text-muted-foreground/60 font-medium py-1">
+                  {sectionTotal === 0 ? (
+                    <p className="text-[11px] text-muted-foreground/60 font-medium select-none">
                       No {sec.label.toLowerCase()} tasks
                     </p>
                   ) : (
@@ -90,7 +126,7 @@ export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
                         <div
                           key={todo.id}
                           className={[
-                            "px-3 py-2.5 sm:px-3.5 flex items-center justify-between gap-3 transition-colors",
+                            "px-3 py-2 sm:px-3.5 flex items-center justify-between gap-3 transition-colors",
                             isCompleted
                               ? "bg-muted/30"
                               : "bg-card hover:bg-muted/20",
@@ -134,6 +170,7 @@ export function YouTodoList({ todos, otherUserLabel }: YouTodoListProps) {
     </div>
   );
 }
+
 
 
 
