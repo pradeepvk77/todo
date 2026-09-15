@@ -8,6 +8,7 @@ import { StatsCard } from "@/components/StatsCard";
 import { Calendar } from "lucide-react";
 import { TaskMenu } from "@/components/TaskMenu";
 import { DailyQuote } from "@/components/DailyQuote";
+import { DailyWordStrip } from "@/components/DailyWordStrip";
 
 export const revalidate = 0;
 
@@ -49,6 +50,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ u
 
       {/* SECTION 3 — MOTIVATIONAL QUOTE */}
       {!viewingOtherUser && <DailyQuote />}
+
+      {/* SECTION 3.5 — DAILY VOCABULARY WORD STRIP */}
+      {!viewingOtherUser && <DailyWordStrip />}
 
       {/* SECTION 4 & 5 — TASK SUMMARY, FILTERS AND TASK LIST */}
       {!viewingOtherUser ? (

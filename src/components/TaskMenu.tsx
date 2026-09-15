@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { BarChart3, ClipboardList, LogOut, MoreVertical, Pencil, Settings, User, Users } from "lucide-react";
+import { BarChart3, BookOpen, ClipboardList, LogOut, MoreVertical, Pencil, Settings, User, Users } from "lucide-react";
 import Link from "next/link";
 import { logoutAction } from "@/app/actions/auth";
 
@@ -95,6 +95,16 @@ export function TaskMenu({ otherUser = false, otherUserName }: { otherUser?: boo
             <BarChart3 className="size-4" />
             Analytics
           </Link>
+          {!otherUser && (
+            <Link
+              href="/vocabulary"
+              onClick={closeMenu}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
+            >
+              <BookOpen className="size-4" />
+              Daily vocabulary
+            </Link>
+          )}
           <Link
             href={`/history${suffix}`}
             onClick={closeMenu}
