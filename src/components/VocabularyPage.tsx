@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useEffect, useTransition, useMemo } from "react";
 import { WordCard } from "@/components/WordCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,6 +63,24 @@ export function VocabularyPageClient({
   const isViewingToday = viewMode === "date" && viewingDate === today;
   const pastDates = historyDates.filter((d) => d !== today);
 
+  // Sync initial server data into LocalStorage cache
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if (todayData && todayData.words.length > 0) {
+        localStorage.setItem(`todo_vocab_daily_${today}`, JSON.stringify(todayData));
+      }
+      if (allWords && allWords.length > 0) {
+        localStorage.setItem("todo_vocab_all", JSON.stringify(allWords));
+      }
+      if (historyDates && historyDates.length > 0) {
+        localStorage.setItem("todo_vocab_history", JSON.stringify(historyDates));
+      }
+    } catch {
+      // LocalStorage errors ignored gracefully
+    }
+  }, [today, todayData, historyDates, allWords]);
+
   // Search filtering logic
   const searchFilteredWords = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -81,6 +99,25 @@ export function VocabularyPageClient({
     setViewMode("date");
     if (date === viewingDate && viewMode === "date") return;
     setError(null);
+
+    // 1. Check LocalStorage first for zero-lag instant UI rendering
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(`todo_vocab_daily_${date}`);
+        if (cached) {
+          const parsed = JSON.parse(cached) as DailyVocabularyData;
+          if (parsed && Array.isArray(parsed.words) && parsed.words.length > 0) {
+            setViewingDate(date);
+            setViewingData(parsed);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to server fetch
+      }
+    }
+
+    // 2. LocalStorage cache miss -> fetch from DB / server with loading indicator
     startTransition(async () => {
       const data = await getDailyVocabulary(date);
       if (!data) {
@@ -88,6 +125,13 @@ export function VocabularyPageClient({
       } else {
         setViewingDate(date);
         setViewingData(data);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(`todo_vocab_daily_${date}`, JSON.stringify(data));
+          } catch {
+            // Ignore
+          }
+        }
       }
     });
   }
@@ -96,6 +140,24 @@ export function VocabularyPageClient({
     setShowHistoryDropdown(false);
     setViewMode("date");
     setViewingDate(today);
+
+    // Check LocalStorage cache for today
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(`todo_vocab_daily_${today}`);
+        if (cached) {
+          const parsed = JSON.parse(cached) as DailyVocabularyData;
+          if (parsed && Array.isArray(parsed.words) && parsed.words.length > 0) {
+            setViewingData(parsed);
+            setError(null);
+            return;
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
     setViewingData(todayData);
     setError(null);
   }

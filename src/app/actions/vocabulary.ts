@@ -3,7 +3,7 @@
 import { sql, initVocabularyTables, VocabularyWord } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { getISTDateString } from "@/lib/time-utils";
-import { getWordCandidatesForDate, WordEntry } from "@/lib/vocabulary-words";
+import { getWordCandidatesForDate, WordEntry, getFallbackWordDetails, HINDI_DICTIONARY } from "@/lib/vocabulary-words";
 
 let vocabDbInitialized = false;
 async function ensureVocabDb() {
@@ -101,12 +101,19 @@ function parseWord(row: VocabularyWord): VocabularyWordData {
   } catch {
     synonyms = [];
   }
+
+  const wordKey = row.word_key || normalizeWordKey(row.word);
+  let hindiMeaning = row.hindi_meaning;
+  if (!hindiMeaning || normalizeWordKey(hindiMeaning) === wordKey) {
+    hindiMeaning = HINDI_DICTIONARY[wordKey] || row.word;
+  }
+
   return {
     id: row.id,
     word: row.word,
     partOfSpeech: row.part_of_speech,
     englishMeaning: row.english_meaning,
-    hindiMeaning: row.hindi_meaning,
+    hindiMeaning,
     exampleSentence: row.example_sentence,
     pronunciation: row.pronunciation,
     synonyms,
@@ -220,58 +227,78 @@ async function fetchDictionaryData(word: string): Promise<{
   exampleSentence: string;
   pronunciation: string;
   synonyms: string[];
-} | null> {
+}> {
   try {
     const res = await fetch(
       `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`,
-      { signal: AbortSignal.timeout(8000) }
+      { signal: AbortSignal.timeout(1500) }
     );
-    if (!res.ok) return null;
+    if (res.ok) {
+      const data = (await res.json()) as DictionaryApiEntry[];
+      const entry = data[0];
+      if (entry) {
+        const pronunciation = entry.phonetics?.find((p) => p.text)?.text ?? "";
+        const firstMeaning = entry.meanings?.[0];
+        if (firstMeaning) {
+          const partOfSpeech = firstMeaning.partOfSpeech ?? "";
+          const firstDef = firstMeaning.definitions?.[0];
+          const englishMeaning = firstDef?.definition ?? "";
+          const exampleSentence = firstDef?.example ?? "";
 
-    const data = (await res.json()) as DictionaryApiEntry[];
-    const entry = data[0];
-    if (!entry) return null;
+          const synonymsFromMeaning = firstMeaning.synonyms ?? [];
+          const synonymsFromDef = firstDef?.synonyms ?? [];
+          const synonyms = [...new Set([...synonymsFromMeaning, ...synonymsFromDef])]
+            .slice(0, 4)
+            .map((s) => String(s));
 
-    const pronunciation = entry.phonetics?.find((p) => p.text)?.text ?? "";
-    const firstMeaning = entry.meanings?.[0];
-    if (!firstMeaning) return null;
-
-    const partOfSpeech = firstMeaning.partOfSpeech ?? "";
-    const firstDef = firstMeaning.definitions?.[0];
-    const englishMeaning = firstDef?.definition ?? "";
-    const exampleSentence = firstDef?.example ?? "";
-
-    const synonymsFromMeaning = firstMeaning.synonyms ?? [];
-    const synonymsFromDef = firstDef?.synonyms ?? [];
-    const synonyms = [...new Set([...synonymsFromMeaning, ...synonymsFromDef])]
-      .slice(0, 4)
-      .map((s) => String(s));
-
-    if (!englishMeaning) return null;
-    return { partOfSpeech, englishMeaning, exampleSentence, pronunciation, synonyms };
+          if (englishMeaning) {
+            return { partOfSpeech, englishMeaning, exampleSentence, pronunciation, synonyms };
+          }
+        }
+      }
+    }
   } catch {
-    return null;
+    // Fast fallback if API is slow or unreachable
   }
+
+  const fallback = getFallbackWordDetails(word);
+  return {
+    partOfSpeech: fallback.partOfSpeech,
+    englishMeaning: fallback.englishMeaning,
+    exampleSentence: fallback.exampleSentence,
+    pronunciation: fallback.pronunciation,
+    synonyms: fallback.synonyms,
+  };
 }
 
 async function fetchHindiMeaning(word: string): Promise<string> {
+  const key = word.toLowerCase().trim();
+  if (HINDI_DICTIONARY[key]) {
+    return HINDI_DICTIONARY[key];
+  }
+
   try {
     const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|hi`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return "";
+    const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        responseStatus?: number;
+        responseData?: { translatedText?: string };
+      };
 
-    const data = (await res.json()) as {
-      responseStatus?: number;
-      responseData?: { translatedText?: string };
-    };
-
-    if (data.responseStatus !== 200) return "";
-    const translated = data.responseData?.translatedText ?? "";
-    if (normalizeWordKey(translated) === normalizeWordKey(word)) return "";
-    return translated;
+      if (data.responseStatus === 200) {
+        const translated = data.responseData?.translatedText ?? "";
+        if (translated && normalizeWordKey(translated) !== normalizeWordKey(word)) {
+          return translated;
+        }
+      }
+    }
   } catch {
-    return "";
+    // Fast fallback if API is slow or unreachable
   }
+
+  const fallback = getFallbackWordDetails(word);
+  return fallback.hindiMeaning;
 }
 
 /**
@@ -360,31 +387,41 @@ async function generateAndSaveDailyVocabulary(
 
     // c. Dictionary lookup
     const dictData = await fetchDictionaryData(candidate.word);
-    if (!dictData) continue;
 
-    // d. Quality validation
-    if (!isPracticalWord(dictData.englishMeaning, dictData.partOfSpeech)) continue;
-
-    // e. Hindi meaning (failure is non-blocking — we still save the word)
+    // d. Hindi meaning lookup
     const hindiMeaning = await fetchHindiMeaning(candidate.word);
 
     collected.push({
       entry: candidate,
       wordKey,
-      partOfSpeech: dictData.partOfSpeech,
-      englishMeaning: dictData.englishMeaning,
-      hindiMeaning,
-      exampleSentence: dictData.exampleSentence,
-      pronunciation: dictData.pronunciation,
-      synonyms: dictData.synonyms,
+      partOfSpeech: dictData.partOfSpeech || "verb",
+      englishMeaning: dictData.englishMeaning || `Essential English vocabulary for ${candidate.context}.`,
+      hindiMeaning: hindiMeaning || candidate.word,
+      exampleSentence: dictData.exampleSentence || `Using "${candidate.word}" improves everyday communication.`,
+      pronunciation: dictData.pronunciation || `/${candidate.word}/`,
+      synonyms: dictData.synonyms || [],
     });
   }
 
+  // Safety backstop: if fewer than 5 words collected, fill remaining slots
   if (collected.length < 5) {
-    console.error(
-      `Vocabulary generation failed: only ${collected.length}/5 words found for ${date}`
-    );
-    return null;
+    for (const candidate of candidates) {
+      if (collected.length >= 5) break;
+      const wordKey = normalizeWordKey(candidate.word);
+      if (collected.some((c) => c.wordKey === wordKey)) continue;
+
+      const fb = getFallbackWordDetails(candidate.word);
+      collected.push({
+        entry: candidate,
+        wordKey,
+        partOfSpeech: fb.partOfSpeech,
+        englishMeaning: fb.englishMeaning,
+        hindiMeaning: fb.hindiMeaning,
+        exampleSentence: fb.exampleSentence,
+        pronunciation: fb.pronunciation,
+        synonyms: fb.synonyms,
+      });
+    }
   }
 
   // ── 4. Insert daily_vocabulary (UPSERT handles concurrent race conditions) ─

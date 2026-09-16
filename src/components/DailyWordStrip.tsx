@@ -6,19 +6,63 @@ import { Sparkles, Volume2, ArrowRight } from "lucide-react";
 import { getDailyVocabulary } from "@/app/actions/vocabulary";
 import type { VocabularyWordData } from "@/app/actions/vocabulary";
 
+function getISTDateString(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
 export function DailyWordStrip() {
   const [randomWord, setRandomWord] = useState<VocabularyWordData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadTodayWord() {
+      const todayDate = getISTDateString();
+      const cacheKey = `todo_vocab_daily_${todayDate}`;
+
+      // 1. Check LocalStorage first for instant 0ms rendering
+      if (typeof window !== "undefined") {
+        try {
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && Array.isArray(parsed.words) && parsed.words.length > 0) {
+              const randomIndex = Math.floor(Math.random() * parsed.words.length);
+              setRandomWord(parsed.words[randomIndex]);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      // 2. Fetch from DB/Server if not in LocalStorage
       try {
         const data = await getDailyVocabulary();
         if (data && data.words.length > 0) {
           const randomIndex = Math.floor(Math.random() * data.words.length);
           setRandomWord(data.words[randomIndex]);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(data));
+            } catch {
+              // Ignore
+            }
+          }
         }
       } catch (err) {
         console.error("Failed to load daily word strip:", err);
+      } finally {
+        setLoading(false);
       }
     }
     void loadTodayWord();
@@ -46,6 +90,21 @@ export function DailyWordStrip() {
     if (indianVoice) utterance.voice = indianVoice;
     window.speechSynthesis.speak(utterance);
   };
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-border/60 bg-card p-3 sm:p-3.5 shadow-2xs flex items-center justify-between animate-pulse">
+        <div className="flex items-center gap-2.5">
+          <div className="size-7 rounded-lg bg-muted" />
+          <div className="space-y-1">
+            <div className="h-2.5 w-16 bg-muted rounded" />
+            <div className="h-4 w-24 bg-muted rounded" />
+          </div>
+        </div>
+        <div className="h-4 w-20 bg-muted rounded" />
+      </div>
+    );
+  }
 
   if (!randomWord) return null;
 

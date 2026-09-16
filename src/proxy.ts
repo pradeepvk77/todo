@@ -7,7 +7,10 @@ const encodedKey = new TextEncoder().encode(SECRET_KEY);
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const isPublicRoute = pathname === "/login";
+  const isPublicRoute =
+    pathname === "/login" ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/site.webmanifest";
 
   const sessionToken = request.cookies.get("session")?.value;
   let isAuthenticated = false;
@@ -39,5 +42,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.png$).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|manifest\\.webmanifest|.*\\.png$).*)"],
 };

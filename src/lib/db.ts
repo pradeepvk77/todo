@@ -168,5 +168,24 @@ export async function initVocabularyTables() {
   // Unique index on word_key — the primary normalized uniqueness guarantee
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS vocabulary_words_word_key_uidx ON vocabulary_words (word_key)`;
   await sql`CREATE INDEX IF NOT EXISTS vocabulary_words_daily_vocabulary_id_idx ON vocabulary_words (daily_vocabulary_id)`;
+
+  // Back-fill Hindi meanings for any rows where hindi_meaning was empty or fallback-copied from English word
+  try {
+    const badRows = (await sql`
+      SELECT id, word FROM vocabulary_words 
+      WHERE hindi_meaning = '' OR LOWER(TRIM(hindi_meaning)) = LOWER(TRIM(word))
+    `) as { id: number; word: string }[];
+
+    const { HINDI_DICTIONARY } = await import("./vocabulary-words");
+    for (const row of badRows) {
+      const key = row.word.toLowerCase().trim();
+      const hindi = HINDI_DICTIONARY[key];
+      if (hindi) {
+        await sql`UPDATE vocabulary_words SET hindi_meaning = ${hindi} WHERE id = ${row.id}`;
+      }
+    }
+  } catch (e) {
+    console.error("Migration error back-filling Hindi meanings:", e);
+  }
 }
 
