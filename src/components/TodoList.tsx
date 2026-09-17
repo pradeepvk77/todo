@@ -345,7 +345,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
         </div>
       )}
 
-      {/* Next task in current section */}
+      {/* Next task in current section
       {guidance.type === "next_task" && guidance.nextTask && (
         <div className="rounded-xl border border-border/80 bg-card shadow-2xs overflow-hidden animate-in fade-in-50 duration-300">
           <div className="flex items-center gap-3 px-3.5 py-2.5">
@@ -373,7 +373,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
             <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
           </div>
         </div>
-      )}
+      )} */}
 
       {/* ── Task list ─────────────────────────────────────────────────────── */}
       {visibleTodos.length === 0 ? (

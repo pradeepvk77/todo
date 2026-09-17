@@ -334,8 +334,8 @@ function isPracticalWord(englishMeaning: string, partOfSpeech: string): boolean 
  *     c. Fetch dictionary definition.
  *     d. Run quality/practicality validation.
  *     e. Fetch Hindi meaning.
- *  4. After collecting exactly 5 valid words, insert daily_vocabulary row.
- *  5. Insert all 5 vocabulary_words in a try/catch; roll back parent on failure.
+ *  4. After collecting exactly 20 valid words, insert daily_vocabulary row.
+ *  5. Insert all 20 vocabulary_words in a try/catch; roll back parent on failure.
  */
 async function generateAndSaveDailyVocabulary(
   date: string
@@ -356,7 +356,7 @@ async function generateAndSaveDailyVocabulary(
   // ── 2. Get shuffled candidates for this date ─────────────────────────────
   const candidates = getWordCandidatesForDate(date, usedWordKeys);
 
-  // ── 3. Collect 5 valid words ─────────────────────────────────────────────
+  // ── 3. Collect 20 valid words ────────────────────────────────────────────
   type Collected = {
     entry: WordEntry;
     wordKey: string;
@@ -370,7 +370,7 @@ async function generateAndSaveDailyVocabulary(
   const collected: Collected[] = [];
 
   for (const candidate of candidates) {
-    if (collected.length >= 5) break;
+    if (collected.length >= 20) break;
 
     const wordKey = normalizeWordKey(candidate.word);
 
@@ -403,10 +403,10 @@ async function generateAndSaveDailyVocabulary(
     });
   }
 
-  // Safety backstop: if fewer than 5 words collected, fill remaining slots
-  if (collected.length < 5) {
+  // Safety backstop: if fewer than 20 words collected, fill remaining slots
+  if (collected.length < 20) {
     for (const candidate of candidates) {
-      if (collected.length >= 5) break;
+      if (collected.length >= 20) break;
       const wordKey = normalizeWordKey(candidate.word);
       if (collected.some((c) => c.wordKey === wordKey)) continue;
 
@@ -439,7 +439,7 @@ async function generateAndSaveDailyVocabulary(
     return null;
   }
 
-  // ── 5. Insert 5 words; roll back parent on failure ───────────────────────
+  // ── 5. Insert 20 words; roll back parent on failure ──────────────────────
   const savedWords: VocabularyWordData[] = [];
   try {
     for (const w of collected) {
@@ -477,7 +477,7 @@ async function generateAndSaveDailyVocabulary(
   }
 
   // If some words were skipped by the DB conflict guard, re-fetch the full set
-  if (savedWords.length < 5) {
+  if (savedWords.length < 20) {
     const allWords = (await sql`
       SELECT * FROM vocabulary_words
       WHERE daily_vocabulary_id = ${dailyVocabId}

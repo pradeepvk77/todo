@@ -9,7 +9,7 @@ export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Daily Vocabulary — Lets Do It",
-  description: "Learn 5 new English words every day with Hindi meanings, examples, and pronunciations.",
+  description: "Learn 20 new English words every day with Hindi meanings, examples, and pronunciations.",
 };
 
 export default async function VocabularyPage() {

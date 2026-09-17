@@ -1,5 +1,6 @@
-import { getAnalytics, getFriendNicknamePreference } from "@/app/actions";
-import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
+import { getFriendNicknamePreference } from "@/app/actions";
+import { getAllTasksAnalytics, getIndividualTaskAnalytics, TimeRange } from "@/app/actions/analytics";
+import { AnalyticsPageClient } from "@/components/AnalyticsPageClient";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/session";
 import { ArrowLeft } from "lucide-react";
@@ -8,14 +9,48 @@ import { redirect } from "next/navigation";
 
 export const revalidate = 0;
 
-export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ user?: string }> }) {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ user?: string; taskId?: string; range?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect("/login");
-  const { user } = await searchParams;
-  const otherUser = user === "other";
+
+  const resolvedParams = await searchParams;
+  const otherUser = resolvedParams.user === "other";
+  const targetUserId = otherUser ? (session.userId === "user1" ? "user2" : "user1") : session.userId;
   const defaultOtherUserName = session.userId === "user1" ? "User 2" : "User 1";
-  const [analytics, friendNickname] = await Promise.all([getAnalytics(otherUser), getFriendNicknamePreference()]);
+  const friendNickname = await getFriendNicknamePreference();
   const otherUserName = friendNickname || defaultOtherUserName;
 
-  return <main className="min-h-screen w-full max-w-3xl mx-auto px-4 py-10 sm:px-6"><header className="mb-7 flex items-start justify-between gap-4 border-b border-border pb-5"><div><h1 className="text-2xl font-bold tracking-tight">{otherUser ? `${otherUserName}'s Analytics` : "Analytics"}</h1><p className="mt-1 text-xs text-muted-foreground">A clear view of {otherUser ? `${otherUserName}'s` : "your"} task completion habits.</p></div><Link href="/"><Button variant="outline" size="sm" className="gap-2 cursor-pointer"><ArrowLeft className="size-3.5" />Dashboard</Button></Link></header><AnalyticsDashboard analytics={analytics} /></main>;
+  const range: TimeRange = (resolvedParams.range as TimeRange) || (resolvedParams.taskId ? "last_30_days" : "this_week");
+  const taskId = resolvedParams.taskId ? parseInt(resolvedParams.taskId, 10) : null;
+
+  let initialAllData = null;
+  let initialTaskData = null;
+
+  if (taskId && !isNaN(taskId)) {
+    try {
+      initialTaskData = await getIndividualTaskAnalytics(taskId, range, targetUserId);
+    } catch {
+      initialAllData = await getAllTasksAnalytics("this_week", targetUserId);
+    }
+  } else {
+    initialAllData = await getAllTasksAnalytics(range, targetUserId);
+  }
+
+  return (
+    <main className="min-h-screen w-full max-w-4xl mx-auto px-4 py-6 sm:px-6 space-y-6">
+      <AnalyticsPageClient
+        initialAllData={initialAllData}
+        initialTaskData={initialTaskData}
+        isOtherUser={otherUser}
+        otherUserName={otherUserName}
+        initialTaskId={taskId}
+        initialTimeRange={range}
+      />
+    </main>
+  );
 }
+

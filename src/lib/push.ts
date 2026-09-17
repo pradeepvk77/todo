@@ -1,4 +1,8 @@
-import "server-only";
+if (process.env.NODE_ENV !== "test" && !process.env.TEST_USER_ID) {
+  try {
+    require("server-only");
+  } catch {}
+}
 
 import webpush from "web-push";
 import { sql } from "@/lib/db";

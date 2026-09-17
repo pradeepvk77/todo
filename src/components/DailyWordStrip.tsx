@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sparkles, Volume2, ArrowRight } from "lucide-react";
-import { getDailyVocabulary } from "@/app/actions/vocabulary";
 import type { VocabularyWordData } from "@/app/actions/vocabulary";
+import { HINDI_DICTIONARY } from "@/lib/vocabulary-words";
 
 function getISTDateString(): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -47,7 +47,8 @@ export function DailyWordStrip() {
 
       // 2. Fetch from DB/Server if not in LocalStorage
       try {
-        const data = await getDailyVocabulary();
+        const res = await fetch(`/api/vocabulary?date=${todayDate}`);
+        const data = res.ok ? (await res.json() as { words: VocabularyWordData[] }) : null;
         if (data && data.words.length > 0) {
           const randomIndex = Math.floor(Math.random() * data.words.length);
           setRandomWord(data.words[randomIndex]);
@@ -68,9 +69,11 @@ export function DailyWordStrip() {
     void loadTodayWord();
   }, []);
 
-  const speakWord = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const speakWord = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (!randomWord || typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
     window.speechSynthesis.cancel();
@@ -93,59 +96,76 @@ export function DailyWordStrip() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-border/60 bg-card p-3 sm:p-3.5 shadow-2xs flex items-center justify-between animate-pulse">
-        <div className="flex items-center gap-2.5">
-          <div className="size-7 rounded-lg bg-muted" />
+      <div className="rounded-2xl border border-border/60 bg-card p-3.5 sm:p-4 shadow-2xs flex items-center justify-between animate-pulse">
+        <div className="flex items-center gap-3">
+          <div className="size-10 rounded-xl bg-muted" />
           <div className="space-y-1">
-            <div className="h-2.5 w-16 bg-muted rounded" />
-            <div className="h-4 w-24 bg-muted rounded" />
+            <div className="h-3 w-20 bg-muted rounded" />
+            <div className="h-5 w-32 bg-muted rounded" />
           </div>
         </div>
-        <div className="h-4 w-20 bg-muted rounded" />
+        <div className="h-4 w-24 bg-muted rounded" />
       </div>
     );
   }
 
   if (!randomWord) return null;
 
+  const hindiText =
+    randomWord.hindiMeaning ||
+    HINDI_DICTIONARY[randomWord.word.toLowerCase()] ||
+    "";
+
   return (
-    <Link href="/vocabulary" className="block group">
-      <div className="relative overflow-hidden rounded-xl border border-primary/25 bg-gradient-to-r from-primary/10 via-background to-primary/5 p-3 sm:p-3.5 shadow-2xs hover:border-primary/40 transition-all flex items-center justify-between gap-3">
-        {/* Left Side: Word + Speaker */}
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-            <Sparkles className="size-3.5" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block leading-none mb-0.5">
-              Daily Word
-            </span>
-            <div className="flex items-center gap-1.5">
-              <h3 className="text-sm sm:text-base font-bold text-foreground capitalize truncate">
-                {randomWord.word}
-              </h3>
-              <button
-                type="button"
-                onClick={speakWord}
-                className="p-1 rounded-full text-muted-foreground hover:text-primary hover:bg-muted/60 transition-colors cursor-pointer shrink-0"
-                title="Listen in Indian English accent"
-              >
-                <Volume2 className="size-3.5 text-primary" />
-              </button>
-            </div>
-          </div>
+    <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card p-3.5 sm:p-4 shadow-2xs flex items-center justify-between gap-3">
+      {/* LEFT REGION: TAP TO PLAY SOUND */}
+      <div
+        onClick={speakWord}
+        className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group/left"
+        title="Tap to listen pronunciation"
+      >
+        <div className="size-10 sm:size-11 shrink-0 rounded-xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center border border-emerald-500/25 group-hover/left:bg-emerald-500/25 transition-colors">
+          <Sparkles className="size-5 sm:size-6 text-emerald-600" />
         </div>
 
-        {/* Right Side: Hindi Meaning + Arrow */}
-        <div className="flex items-center gap-2 text-right shrink-0">
-          {randomWord.hindiMeaning && (
-            <span className="text-xs sm:text-sm font-bold text-primary max-w-[150px] sm:max-w-[220px] truncate">
-              {randomWord.hindiMeaning}
-            </span>
-          )}
-          <ArrowRight className="size-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
+        <div className="min-w-0 flex-1 space-y-1">
+          <span className="text-[10px] sm:text-[11px] font-bold text-muted-foreground uppercase tracking-wider block leading-none">
+            Today&apos;s Word
+          </span>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-base sm:text-xl font-extrabold text-foreground capitalize truncate">
+              {randomWord.word}
+            </h3>
+            {hindiText && (
+              <span className="text-xs sm:text-sm font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                {hindiText}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={speakWord}
+              className="p-1.5 sm:p-2 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 transition-colors cursor-pointer shrink-0 border border-emerald-500/20"
+              title="Listen pronunciation"
+            >
+              <Volume2 className="size-4 sm:size-5 text-emerald-600 stroke-[2.5]" />
+            </button>
+          </div>
+
+          <p className="text-xs text-muted-foreground truncate font-medium max-w-[200px] sm:max-w-xs">
+            {randomWord.englishMeaning || "To give a detailed account in words."}
+          </p>
         </div>
       </div>
-    </Link>
+
+      {/* RIGHT REGION: NAVIGATE TO VOCABULARY PAGE */}
+      <Link
+        href="/vocabulary"
+        className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-emerald-600 shrink-0 transition-colors pl-2 border-l border-border/60 py-2 group/right cursor-pointer"
+      >
+        <span className="hidden sm:inline">Tap to see more</span>
+        <ArrowRight className="size-4 group-hover/right:translate-x-1 transition-transform" />
+      </Link>
+    </div>
   );
 }

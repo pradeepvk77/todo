@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless";
+import { Pool } from "pg";
 import { AssignedDay } from "./time-utils";
 
 export interface DailyVocabulary {
@@ -23,6 +24,19 @@ export interface VocabularyWord {
 }
 
 export type DaySection = "MORNING" | "AFTERNOON" | "EVENING" | "NIGHT";
+export type Priority = "must_do" | "should_do" | "nice_to_do";
+export type TaskKind = "habit" | "one_time" | "learning" | "exercise" | "personal" | "work" | "other";
+export type Difficulty = "easy" | "medium" | "hard";
+export type ExpectedEffort = "low" | "medium" | "high";
+export type OccurrenceStatus = "pending" | "completed" | "skipped" | "rescheduled" | "no_action";
+export type MissedReason =
+  | "too_tired"
+  | "forgot"
+  | "not_in_mood"
+  | "ran_out_of_time"
+  | "something_came_up"
+  | "not_important"
+  | "other";
 
 export interface Todo {
   id: number;
@@ -36,6 +50,50 @@ export interface Todo {
   assigned_day: AssignedDay;
   day_section: DaySection;
   last_reset_date: string;
+  created_at: string;
+  // Extended Phase 1 Fields
+  priority?: Priority;
+  task_kind?: TaskKind;
+  estimated_duration?: number;
+  difficulty?: Difficulty;
+  expected_effort?: ExpectedEffort;
+  goal_reason?: string;
+  note?: string;
+  scheduled_date?: string;
+  scheduled_time?: string;
+}
+
+export interface TaskOccurrence {
+  id: number;
+  user_id: string;
+  todo_id: number;
+  occurrence_date: string;
+  status: OccurrenceStatus;
+  scheduled_time?: string;
+  completed_at?: string;
+  skipped_at?: string;
+  rescheduled_at?: string;
+  rescheduled_to_date?: string;
+  rescheduled_to_time?: string;
+  missed_reason?: MissedReason | "";
+  missed_reason_notes?: string;
+  review_status?: "unreviewed" | "reviewed";
+  reviewed_at?: string;
+  app_update_reason?: string;
+  app_update_reason_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskActivity {
+  id: number;
+  user_id: string;
+  todo_id: number;
+  occurrence_date?: string;
+  action_type: "created" | "completed" | "uncompleted" | "skipped" | "rescheduled" | "no_action" | "updated";
+  previous_value?: string;
+  new_value?: string;
+  metadata?: string;
   created_at: string;
 }
 
@@ -59,7 +117,33 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL environment variable is not set");
 }
 
-export const sql = neon(process.env.DATABASE_URL);
+const dbUrl = process.env.DATABASE_URL;
+const isNeon = dbUrl.includes("neon.tech");
+
+declare global {
+  // eslint-disable-next-line no-var
+  var _pgPool: Pool | undefined;
+}
+
+function createPgSql(url: string) {
+  if (!globalThis._pgPool) {
+    globalThis._pgPool = new Pool({ connectionString: url });
+  }
+  const pool = globalThis._pgPool;
+
+  async function sql(strings: TemplateStringsArray, ...values: any[]) {
+    let text = strings[0];
+    for (let i = 1; i < strings.length; i++) {
+      text += `$${i}` + strings[i];
+    }
+    const res = await pool.query(text, values);
+    return res.rows;
+  }
+
+  return sql as any;
+}
+
+export const sql = isNeon ? neon(dbUrl) : createPgSql(dbUrl);
 
 // Initialize the todos table if it doesn't exist
 export async function initDb() {
@@ -94,6 +178,16 @@ export async function initDb() {
   await sql`
     ALTER TABLE todos ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Personal'
   `;
+  await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'should_do'`;
+  await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS task_kind TEXT DEFAULT 'other'`;
+  await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS estimated_duration INTEGER DEFAULT 15`;
+  await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS difficulty TEXT DEFAULT 'medium'`;
+  await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS expected_effort TEXT DEFAULT 'medium'`;
+  await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS goal_reason TEXT DEFAULT ''`;
+  await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''`;
+  await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS scheduled_date TEXT DEFAULT ''`;
+  await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS scheduled_time TEXT DEFAULT ''`;
+
   await sql`
     CREATE TABLE IF NOT EXISTS task_completions (
       id              SERIAL PRIMARY KEY,
@@ -110,6 +204,52 @@ export async function initDb() {
   await sql`
     ALTER TABLE task_completions ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Personal'
   `;
+  await sql`ALTER TABLE task_completions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ DEFAULT NOW()`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS task_completions_user_todo_date_uidx ON task_completions (user_id, todo_id, completed_date)`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS task_occurrences (
+      id                  SERIAL PRIMARY KEY,
+      user_id             TEXT NOT NULL,
+      todo_id             INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+      occurrence_date     TEXT NOT NULL,
+      status              TEXT NOT NULL DEFAULT 'pending',
+      scheduled_time      TEXT DEFAULT '',
+      completed_at        TIMESTAMPTZ,
+      skipped_at          TIMESTAMPTZ,
+      rescheduled_at      TIMESTAMPTZ,
+      missed_reason       TEXT DEFAULT '',
+      missed_reason_notes TEXT DEFAULT '',
+      created_at          TIMESTAMPTZ DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (user_id, todo_id, occurrence_date)
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS task_occurrences_user_date_idx ON task_occurrences (user_id, occurrence_date)`;
+  await sql`CREATE INDEX IF NOT EXISTS task_occurrences_todo_id_idx ON task_occurrences (todo_id)`;
+  await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS review_status TEXT DEFAULT 'unreviewed'`;
+  await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ`;
+  await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS app_update_reason TEXT DEFAULT ''`;
+  await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS app_update_reason_notes TEXT DEFAULT ''`;
+  await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS rescheduled_to_date TEXT DEFAULT ''`;
+  await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS rescheduled_to_time TEXT DEFAULT ''`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS task_activities (
+      id              SERIAL PRIMARY KEY,
+      user_id         TEXT NOT NULL,
+      todo_id         INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+      occurrence_date TEXT DEFAULT '',
+      action_type     TEXT NOT NULL,
+      previous_value  TEXT DEFAULT '{}',
+      new_value       TEXT DEFAULT '{}',
+      metadata        TEXT DEFAULT '{}',
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS task_activities_user_todo_idx ON task_activities (user_id, todo_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS task_activities_created_at_idx ON task_activities (created_at)`;
+
   await sql`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id          SERIAL PRIMARY KEY,
@@ -144,6 +284,9 @@ export async function initVocabularyTables() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  // Ensure the UNIQUE constraint exists for ON CONFLICT (date) even on tables
+  // that were created before the UNIQUE keyword was added to the column definition.
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS daily_vocabulary_date_uidx ON daily_vocabulary (date)`;
   await sql`
     CREATE TABLE IF NOT EXISTS vocabulary_words (
       id                   SERIAL PRIMARY KEY,

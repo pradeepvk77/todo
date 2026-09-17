@@ -24,7 +24,7 @@ function getClientTimeData() {
   };
 }
 
-export function Greeting() {
+export function Greeting({ userName = "Valentine" }: { userName?: string }) {
   const isMounted = useSyncExternalStore(
     emptySubscribe,
     () => true,
@@ -34,18 +34,16 @@ export function Greeting() {
   const timeData = isMounted ? getClientTimeData() : null;
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="p-2.5 bg-primary/10 text-primary rounded-xl flex-shrink-0 border border-primary/15">
-        <CheckSquare className="w-5 h-5" />
-      </div>
+    <div className="flex items-center justify-between w-full">
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-          {timeData ? `${timeData.greeting.text} ${timeData.greeting.emoji}` : "Hello 👋"}
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-1.5">
+          <span>{timeData ? `${timeData.greeting.text},` : "Hello,"}</span>
+          <span className="text-foreground">{userName}</span>
+          <span className="inline-block animate-bounce">👋</span>
         </h1>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
-          <Calendar className="w-3.5 h-3.5 text-muted-foreground/70" />
-          <span>{timeData?.formattedDate ?? ""}</span>
-        </div>
+        <p className="text-xs text-muted-foreground/80 font-medium mt-0.5">
+          {timeData?.formattedDate ?? "Wednesday, September 16, 2026"}
+        </p>
       </div>
     </div>
   );

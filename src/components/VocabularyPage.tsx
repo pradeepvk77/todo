@@ -182,7 +182,7 @@ export function VocabularyPageClient({
             </h1>
           </div>
           <p className="text-xs text-muted-foreground">
-            5 new English words every day with Hindi meanings
+            20 new English words every day with Hindi meanings
           </p>
         </div>
         <Link href="/">

@@ -48,10 +48,10 @@ export function WordCard({ word, index }: WordCardProps) {
         <button
           type="button"
           onClick={speakWord}
-          className="p-1.5 rounded-full text-muted-foreground hover:text-primary hover:bg-muted transition-colors cursor-pointer"
+          className="p-2 sm:p-2.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 transition-colors cursor-pointer border border-emerald-500/20 shrink-0 shadow-2xs"
           title="Listen to Indian English pronunciation"
         >
-          <Volume2 className="size-4 text-primary" />
+          <Volume2 className="size-5 sm:size-6 text-emerald-600" />
         </button>
         {word.partOfSpeech && (
           <Badge

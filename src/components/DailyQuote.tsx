@@ -87,17 +87,20 @@ export function DailyQuote() {
   }, []);
 
   return (
-    <section className="relative overflow-hidden rounded-xl border border-border/80 p-3.5 sm:p-4 shadow-2xs" style={{ backgroundImage: `url(${background.image})`, backgroundPosition: "center", backgroundSize: "cover" }}>
-      <div className={`absolute inset-0 ${background.overlay}`} />
+    <section
+      className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-r from-orange-100/60 via-amber-50/80 to-amber-100/40 dark:from-amber-950/30 dark:to-orange-950/20 p-4 sm:p-4.5 shadow-2xs"
+      style={{ backgroundImage: `url(${background.image})`, backgroundPosition: "center", backgroundSize: "cover" }}
+    >
+      <div className="absolute inset-0 bg-white/40 dark:bg-black/40 backdrop-blur-[2px]" />
       <div className="relative flex items-start gap-3">
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-background/80 text-foreground shadow-2xs border border-border/40 mt-0.5">
-          <Quote className="size-3.5 text-primary" />
-        </div>
+        <span className="text-xl sm:text-2xl font-serif text-amber-700 dark:text-amber-400 shrink-0 leading-none mt-0.5">
+          “
+        </span>
         <div className="min-w-0 flex-1">
-          <p className={`font-serif text-sm sm:text-base font-medium italic leading-snug ${background.text}`}>
+          <p className="font-serif text-sm sm:text-base font-semibold italic text-slate-900 dark:text-slate-100 leading-snug">
             “{quote.text}”
           </p>
-          <p className={`mt-1 text-xs ${background.authorText}`}>
+          <p className="mt-1 text-xs font-medium text-slate-600 dark:text-slate-400">
             — {quote.author}
           </p>
         </div>
