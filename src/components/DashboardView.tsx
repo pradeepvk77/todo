@@ -14,6 +14,7 @@ import { YouTodoList } from "@/components/YouTodoList";
 import { DayOffModal } from "@/components/DayOffModal";
 import { ListTodo, ChevronDown, ChevronUp, Pencil, PartyPopper, CheckCircle2, AlertCircle, ArrowRight, Sun, Palmtree } from "lucide-react";
 import Link from "next/link";
+import { WhatsNewModal } from "@/components/WhatsNewModal";
 
 interface DashboardViewProps {
   myTodos: Todo[];
@@ -62,6 +63,9 @@ export function DashboardView({
 
   return (
     <div className="space-y-4">
+      {/* WHAT'S NEW MODAL */}
+      <WhatsNewModal />
+
       {/* DAY OFF MODAL */}
       <DayOffModal
         isOpen={isDayOffOpen}

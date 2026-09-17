@@ -24,6 +24,8 @@ interface IndividualTaskAnalyticsProps {
   data: IndividualTaskAnalyticsData;
   onBack: () => void;
   onSelectTimeRange: (range: TimeRange) => void;
+  includeToday?: boolean;
+  onToggleIncludeToday?: (checked: boolean) => void;
   isOtherUser?: boolean;
 }
 
@@ -37,6 +39,8 @@ export function IndividualTaskAnalytics({
   data,
   onBack,
   onSelectTimeRange,
+  includeToday = false,
+  onToggleIncludeToday,
   isOtherUser = false,
 }: IndividualTaskAnalyticsProps) {
   const [selectedRange, setSelectedRange] = useState<TimeRange>(data.timeRange);
@@ -74,7 +78,7 @@ export function IndividualTaskAnalytics({
   return (
     <div className="space-y-5">
       {/* SECTION 1: HEADER & BACK BUTTON */}
-      <div className="flex items-center justify-between gap-3 pb-2 border-b border-border/70">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-border/70">
         <button
           onClick={onBack}
           className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors cursor-pointer px-2 py-1 rounded-lg hover:bg-muted"
@@ -85,7 +89,17 @@ export function IndividualTaskAnalytics({
 
         <h1 className="text-base sm:text-lg font-bold tracking-tight text-foreground">Task Analytics</h1>
 
-        <div className="relative">
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs font-bold text-foreground cursor-pointer select-none px-2.5 py-1 rounded-xl bg-muted/40 hover:bg-muted/70 transition-colors">
+            <input
+              type="checkbox"
+              checked={includeToday}
+              onChange={(e) => onToggleIncludeToday?.(e.target.checked)}
+              className="size-4 rounded border-border text-emerald-600 focus:ring-emerald-500/30 cursor-pointer accent-emerald-600"
+            />
+            <span>Include today</span>
+          </label>
+
           <select
             value={selectedRange}
             onChange={(e) => handleRangeChange(e.target.value as TimeRange)}

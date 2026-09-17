@@ -305,7 +305,65 @@ export async function initDb() {
       updated_at      TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+  // Track which "What's New" modal version each user has already seen
+  // so we don't show it again across devices/incognito/cache clears
+  await sql`
+    ALTER TABLE user_preferences
+    ADD COLUMN IF NOT EXISTS whats_new_seen_version TEXT NOT NULL DEFAULT ''
+  `;
   await initVocabularyTables();
+  await initReleaseNotificationsTable();
+}
+
+/**
+ * Tracks which release versions have already had their push notification sent.
+ * All display data (modal, /whats-new page) comes from the static
+ * src/lib/release-notes.ts file — no DB reads needed for that.
+ */
+export async function initReleaseNotificationsTable() {
+  // Tiny table: one row per release version, just to prevent re-sending push
+  await sql`
+    CREATE TABLE IF NOT EXISTS release_notifications (
+      version     TEXT PRIMARY KEY,
+      notified_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+
+  // Auto-send push for any release with sendPushNotification: true
+  // that hasn't been sent yet (version not in release_notifications)
+  try {
+    const { RELEASE_NOTES } = await import("./release-notes");
+    const { sendPushToUser } = await import("./push");
+
+    const sentRows = (await sql`SELECT version FROM release_notifications`) as { version: string }[];
+    const sentVersions = new Set(sentRows.map((r) => r.version));
+
+    const toNotify = RELEASE_NOTES.filter(
+      (r) => r.sendPushNotification && !sentVersions.has(r.version)
+    );
+
+    if (toNotify.length === 0) return;
+
+    const userRows = (await sql`SELECT DISTINCT user_id FROM push_subscriptions`) as { user_id: string }[];
+
+    for (const release of toNotify) {
+      const bodyPreview =
+        release.features[0] + (release.features[1] ? ` · ${release.features[1]}` : "");
+
+      for (const { user_id } of userRows) {
+        await sendPushToUser(user_id, {
+          title: `🎉 What's New — ${release.title}`,
+          body: bodyPreview,
+          url: "/whats-new",
+        });
+      }
+
+      await sql`INSERT INTO release_notifications (version) VALUES (${release.version}) ON CONFLICT DO NOTHING`;
+      console.log(`[release] Push sent for ${release.version} — "${release.title}"`);
+    }
+  } catch (e) {
+    console.error("[release] Error during push notification:", e);
+  }
 }
 
 // Initialize vocabulary tables

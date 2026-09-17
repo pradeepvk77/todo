@@ -35,24 +35,31 @@ export function AnalyticsPageClient({
 
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(initialTaskId);
   const [selectedRange, setSelectedRange] = useState<TimeRange>(initialTimeRange);
+  const [includeToday, setIncludeToday] = useState<boolean>(initialAllData?.includeToday ?? false);
 
   const [allData, setAllData] = useState<AllTasksAnalyticsData | null>(initialAllData || null);
   const [taskData, setTaskData] = useState<IndividualTaskAnalyticsData | null>(initialTaskData || null);
 
   const targetUserId = isOtherUser ? "other" : undefined;
 
-  // Handle switching time range
-  const handleSelectTimeRange = (range: TimeRange) => {
+  // Handle switching time range or toggling includeToday
+  const handleSelectTimeRange = (range: TimeRange, incToday?: boolean) => {
+    const nextIncToday = incToday !== undefined ? incToday : includeToday;
     setSelectedRange(range);
+    setIncludeToday(nextIncToday);
     startTransition(async () => {
       if (selectedTaskId) {
-        const updated = await getIndividualTaskAnalytics(selectedTaskId, range, targetUserId);
+        const updated = await getIndividualTaskAnalytics(selectedTaskId, range, targetUserId, nextIncToday);
         setTaskData(updated);
       } else {
-        const updated = await getAllTasksAnalytics(range, targetUserId);
+        const updated = await getAllTasksAnalytics(range, targetUserId, nextIncToday);
         setAllData(updated);
       }
     });
+  };
+
+  const handleToggleIncludeToday = (checked: boolean) => {
+    handleSelectTimeRange(selectedRange, checked);
   };
 
   // Handle selecting a task to view individual analytics
@@ -64,7 +71,7 @@ export function AnalyticsPageClient({
     router.replace(`/analytics?${params.toString()}`);
 
     startTransition(async () => {
-      const updated = await getIndividualTaskAnalytics(taskId, selectedRange, targetUserId);
+      const updated = await getIndividualTaskAnalytics(taskId, selectedRange, targetUserId, includeToday);
       setTaskData(updated);
     });
   };
@@ -81,7 +88,7 @@ export function AnalyticsPageClient({
 
     if (!allData) {
       startTransition(async () => {
-        const updated = await getAllTasksAnalytics(selectedRange, targetUserId);
+        const updated = await getAllTasksAnalytics(selectedRange, targetUserId, includeToday);
         setAllData(updated);
       });
     }
@@ -93,13 +100,17 @@ export function AnalyticsPageClient({
         <IndividualTaskAnalytics
           data={taskData}
           onBack={handleBackToAllTasks}
-          onSelectTimeRange={handleSelectTimeRange}
+          onSelectTimeRange={(range) => handleSelectTimeRange(range, includeToday)}
+          includeToday={includeToday}
+          onToggleIncludeToday={handleToggleIncludeToday}
           isOtherUser={isOtherUser}
         />
       ) : allData ? (
         <AllTasksAnalytics
           initialData={allData}
-          onSelectTimeRange={handleSelectTimeRange}
+          onSelectTimeRange={(range) => handleSelectTimeRange(range, includeToday)}
+          includeToday={includeToday}
+          onToggleIncludeToday={handleToggleIncludeToday}
           onSelectTask={handleSelectTask}
           isOtherUser={isOtherUser}
           otherUserName={otherUserName}

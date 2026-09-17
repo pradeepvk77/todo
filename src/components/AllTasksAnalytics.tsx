@@ -26,6 +26,8 @@ import { DayOffModal } from "@/components/DayOffModal";
 interface AllTasksAnalyticsProps {
   initialData: AllTasksAnalyticsData;
   onSelectTimeRange: (range: TimeRange) => void;
+  includeToday?: boolean;
+  onToggleIncludeToday?: (checked: boolean) => void;
   onSelectTask: (taskId: number) => void;
   isOtherUser?: boolean;
   otherUserName?: string;
@@ -40,6 +42,8 @@ const TIME_RANGES: { key: TimeRange; label: string }[] = [
 export function AllTasksAnalytics({
   initialData,
   onSelectTimeRange,
+  includeToday = false,
+  onToggleIncludeToday,
   onSelectTask,
   isOtherUser = false,
   otherUserName = "User",
@@ -113,21 +117,37 @@ export function AllTasksAnalytics({
         </div>
       </div>
 
-      {/* TIME RANGE PILL TABS */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs font-bold">
-        {TIME_RANGES.map((r) => (
-          <button
-            key={r.key}
-            onClick={() => handleRangeChange(r.key)}
-            className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
-              selectedRange === r.key
-                ? "bg-emerald-600 text-white shadow-xs"
-                : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
+      {/* TIME RANGE PILL TABS + INCLUDE TODAY TOGGLE */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-card p-2 rounded-2xl border border-border/80 shadow-2xs">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-bold">
+          {TIME_RANGES.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => handleRangeChange(r.key)}
+              className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+                selectedRange === r.key
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Include Today Checkbox Toggle (Unchecked by default) */}
+        <label className="flex items-center gap-2 text-xs font-bold text-foreground cursor-pointer select-none px-2.5 py-1.5 rounded-xl bg-muted/40 hover:bg-muted/70 transition-colors">
+          <input
+            type="checkbox"
+            checked={includeToday}
+            onChange={(e) => onToggleIncludeToday?.(e.target.checked)}
+            className="size-4 rounded border-border text-emerald-600 focus:ring-emerald-500/30 cursor-pointer accent-emerald-600"
+          />
+          <span>Include today</span>
+          <span className="text-[10px] text-muted-foreground font-normal">
+            ({includeToday ? "Ends today" : "Ends yesterday"})
+          </span>
+        </label>
       </div>
 
       {/* SECTION 2: OVERALL PERFORMANCE SUMMARY CARDS */}

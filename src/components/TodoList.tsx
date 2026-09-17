@@ -138,6 +138,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
   const [todos, setTodos] = useState<Todo[]>(initialTodos);
   const [prevInitialTodos, setPrevInitialTodos] = useState<Todo[]>(initialTodos);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [justCompletedId, setJustCompletedId] = useState<number | null>(null);
   const [lastCompletedId, setLastCompletedId] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskFilter>("all");
@@ -162,7 +163,9 @@ export function TodoList({ initialTodos }: TodoListProps) {
 
     if (nextCompleted && targetTask) {
       setLastCompletedId(id);
-      const msg = `✓ ${targetTask.title} completed`;
+      setJustCompletedId(id);
+      setTimeout(() => setJustCompletedId((prev) => (prev === id ? null : prev)), 750);
+      const msg = `✓ ${targetTask.title} completed! 🎉`;
       setToastMessage(msg);
       setTimeout(() => {
         setToastMessage((m) => (m === msg ? null : m));
@@ -450,8 +453,10 @@ export function TodoList({ initialTodos }: TodoListProps) {
                                     {...provided.draggableProps}
                                     style={provided.draggableProps.style}
                                     className={[
-                                      "px-3 py-2 sm:px-3.5 flex items-center justify-between gap-3 transition-all duration-300",
-                                      isCompleted
+                                      "px-3 py-2 sm:px-3.5 flex items-center justify-between gap-3 transition-all duration-300 relative overflow-hidden",
+                                      justCompletedId === todo.id
+                                        ? "animate-row-flash bg-emerald-500/15"
+                                        : isCompleted
                                         ? "bg-muted/30 dark:bg-muted/15"
                                         : "bg-card hover:bg-muted/20",
                                       snapshot.isDragging

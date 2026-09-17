@@ -23,35 +23,24 @@ const REASON_LABELS: Record<string, { label: string; icon: string }> = {
   other: { label: "Other", icon: "💬" },
 };
 
-function getDateRange(range: TimeRange): DateRange {
+function getDateRange(range: TimeRange, includeToday: boolean = false): DateRange {
   const today = new Date();
   const formatIST = (d: Date) => getISTDateString(d);
 
-  if (range === "last_7_days") {
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
+  const endDateObj = includeToday
+    ? new Date(today)
+    : (() => {
+        const y = new Date(today);
+        y.setDate(today.getDate() - 1);
+        return y;
+      })();
 
-    const start = new Date(yesterday);
-    start.setDate(yesterday.getDate() - 6);
-
-    const prevEnd = new Date(start);
-    prevEnd.setDate(start.getDate() - 1);
-    const prevStart = new Date(prevEnd);
-    prevStart.setDate(prevEnd.getDate() - 6);
-
-    return {
-      startDate: formatIST(start),
-      endDate: formatIST(yesterday),
-      prevStartDate: formatIST(prevStart),
-      prevEndDate: formatIST(prevEnd),
-    };
-  }
-
-  let days = 30;
+  let days = 7;
+  if (range === "last_30_days") days = 30;
   if (range === "all_time") days = 365;
 
-  const start = new Date(today);
-  start.setDate(today.getDate() - days + 1);
+  const start = new Date(endDateObj);
+  start.setDate(endDateObj.getDate() - days + 1);
 
   const prevEnd = new Date(start);
   prevEnd.setDate(start.getDate() - 1);
@@ -60,7 +49,7 @@ function getDateRange(range: TimeRange): DateRange {
 
   return {
     startDate: formatIST(start),
-    endDate: formatIST(today),
+    endDate: formatIST(endDateObj),
     prevStartDate: formatIST(prevStart),
     prevEndDate: formatIST(prevEnd),
   };
@@ -81,6 +70,7 @@ function resolveUserId(currentUserId: string, targetUserId?: string): string {
 
 export interface AllTasksAnalyticsData {
   timeRange: TimeRange;
+  includeToday?: boolean;
   startDate: string;
   endDate: string;
   overallConsistency: number;
@@ -131,12 +121,13 @@ export interface AllTasksAnalyticsData {
 
 export async function getAllTasksAnalytics(
   timeRange: TimeRange = "last_7_days",
-  targetUserId?: string
+  targetUserId?: string,
+  includeToday: boolean = false
 ): Promise<AllTasksAnalyticsData> {
   await initDb();
   const currentUserId = await requireUser();
   const userId = resolveUserId(currentUserId, targetUserId);
-  const dates = getDateRange(timeRange);
+  const dates = getDateRange(timeRange, includeToday);
 
   // 1. Query occurrences for current period
   const currentOccurrences = (await sql`
@@ -372,6 +363,7 @@ export async function getAllTasksAnalytics(
 
   return {
     timeRange,
+    includeToday,
     startDate: dates.startDate,
     endDate: dates.endDate,
     overallConsistency,
@@ -416,6 +408,7 @@ export interface IndividualTaskAnalyticsData {
   expectedEffort: string;
   goalReason: string;
   timeRange: TimeRange;
+  includeToday?: boolean;
   completionRate: number;
   rateChange: number;
   completedCount: number;
@@ -455,12 +448,13 @@ export interface IndividualTaskAnalyticsData {
 export async function getIndividualTaskAnalytics(
   taskId: number,
   timeRange: TimeRange = "last_7_days",
-  targetUserId?: string
+  targetUserId?: string,
+  includeToday: boolean = false
 ): Promise<IndividualTaskAnalyticsData> {
   await initDb();
   const currentUserId = await requireUser();
   const userId = resolveUserId(currentUserId, targetUserId);
-  const dates = getDateRange(timeRange);
+  const dates = getDateRange(timeRange, includeToday);
 
   // Fetch task info
   const [todo] = (await sql`
@@ -648,6 +642,7 @@ export async function getIndividualTaskAnalytics(
     expectedEffort: todo.expected_effort || "medium",
     goalReason: todo.goal_reason || "",
     timeRange,
+    includeToday,
     completionRate,
     rateChange,
     completedCount,

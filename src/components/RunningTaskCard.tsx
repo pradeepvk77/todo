@@ -16,6 +16,7 @@ import {
   Target,
   RotateCcw,
   XCircle,
+  Loader2,
 } from "lucide-react";
 import {
   Dialog,
@@ -217,10 +218,19 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
               type="button"
               disabled={isPending}
               onClick={handleCompleteTask}
-              className="flex-1 py-3 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer min-w-[140px]"
+              className="flex-1 py-3 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer min-w-[140px] disabled:opacity-80"
             >
-              <Check className="size-4 stroke-[3]" />
-              <span>Complete Task</span>
+              {isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin text-white" />
+                  <span>Completing...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="size-4 stroke-[3] animate-spring-pop" />
+                  <span>Complete Task</span>
+                </>
+              )}
             </button>
 
             <button

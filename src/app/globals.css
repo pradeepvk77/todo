@@ -63,3 +63,91 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+/* ─── Task Completion Animations ────────────────────────────────────────── */
+@keyframes checkmark-draw {
+  0% {
+    stroke-dashoffset: 20;
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes spring-pop {
+  0% { transform: scale(0.85); }
+  45% { transform: scale(1.3); }
+  75% { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+
+@keyframes ring-burst {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.9;
+    border-color: rgba(16, 185, 129, 0.9);
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+    border-color: rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes particle-burst-top-left {
+  0% { transform: translate(0, 0) scale(1.2); opacity: 1; }
+  100% { transform: translate(-14px, -14px) scale(0); opacity: 0; }
+}
+
+@keyframes particle-burst-top-right {
+  0% { transform: translate(0, 0) scale(1.2); opacity: 1; }
+  100% { transform: translate(14px, -14px) scale(0); opacity: 0; }
+}
+
+@keyframes particle-burst-bottom-left {
+  0% { transform: translate(0, 0) scale(1.2); opacity: 1; }
+  100% { transform: translate(-14px, 14px) scale(0); opacity: 0; }
+}
+
+@keyframes particle-burst-bottom-right {
+  0% { transform: translate(0, 0) scale(1.2); opacity: 1; }
+  100% { transform: translate(14px, 14px) scale(0); opacity: 0; }
+}
+
+@keyframes row-complete-flash {
+  0% {
+    background-color: rgba(16, 185, 129, 0.25);
+    box-shadow: inset 0 0 12px rgba(16, 185, 129, 0.2);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.animate-checkmark-draw {
+  stroke-dasharray: 20;
+  animation: checkmark-draw 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-spring-pop {
+  animation: spring-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-ring-burst {
+  animation: ring-burst 0.5s ease-out forwards;
+}
+
+.animate-p-tl { animation: particle-burst-top-left 0.45s ease-out forwards; }
+.animate-p-tr { animation: particle-burst-top-right 0.45s ease-out forwards; }
+.animate-p-bl { animation: particle-burst-bottom-left 0.45s ease-out forwards; }
+.animate-p-br { animation: particle-burst-bottom-right 0.45s ease-out forwards; }
+.animate-row-flash { animation: row-complete-flash 0.6s ease-out forwards; }
