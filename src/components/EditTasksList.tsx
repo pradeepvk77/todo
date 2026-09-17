@@ -6,7 +6,7 @@ import { deleteTodo } from "@/app/actions";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import { EditTaskDialog } from "@/components/EditTaskDialog";
 import { formatAssignedDays } from "@/lib/time-utils";
-import { Trash2, Pencil, Calendar, Clock, CheckSquare, FileText, Hash, Loader2, ArrowLeft, Tag } from "lucide-react";
+import { Trash2, Pencil, Calendar, Clock, CheckSquare, FileText, Hash, Loader2, ArrowLeft, Tag, BarChart2, ChartNoAxesColumn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -136,12 +136,50 @@ export function EditTasksList({ initialTodos }: EditTasksListProps) {
                         <Badge variant="secondary" className="text-[10px] font-medium text-muted-foreground">
                           <Tag className="mr-1 size-2.5" />{todo.category || "Personal"}
                         </Badge>
+
+                        {todo.exclude_from_analytics && (
+                          <Badge variant="secondary" className="text-[10px] font-bold text-amber-600 bg-amber-500/10 border-amber-500/30">
+                            No Analytics
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Action Buttons: Edit (Pen) & Delete (Trash) */}
+                  {/* Action Buttons: Exclude Analytics, Edit & Delete */}
                   <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        const newStatus = !todo.exclude_from_analytics;
+                        setTodos((prev) =>
+                          prev.map((t) => (t.id === todo.id ? { ...t, exclude_from_analytics: newStatus } : t))
+                        );
+                        startTransition(async () => {
+                          const { toggleTaskExcludeAnalytics } = await import("@/app/actions");
+                          await toggleTaskExcludeAnalytics(todo.id);
+                        });
+                      }}
+                      className={`h-8 w-8 rounded-lg cursor-pointer transition-colors ${
+                        todo.exclude_from_analytics
+                          ? "text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      }`}
+                      title={todo.exclude_from_analytics ? "Excluded from analytics (Click to include)" : "Include in analytics (Click to exclude)"}
+                    >
+                      {todo.exclude_from_analytics ? (
+                        <div className="relative inline-flex items-center justify-center size-4">
+                          <ChartNoAxesColumn className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-5 h-[2px] bg-amber-600 dark:bg-amber-400 -rotate-45 rounded-full shadow-2xs" />
+                          </div>
+                        </div>
+                      ) : (
+                        <BarChart2 className="w-4 h-4" />
+                      )}
+                    </Button>
+
                     <Button
                       variant="ghost"
                       size="icon"

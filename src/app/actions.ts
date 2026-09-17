@@ -37,16 +37,15 @@ export interface AnalyticsData {
   taskStreaks: { title: string; streak: number }[];
 }
 
-let dbInitialized = false;
+let dbInitPromise: Promise<void> | null = null;
 async function ensureDb() {
-  if (!dbInitialized) {
-    try {
-      await initDb();
-      dbInitialized = true;
-    } catch (error) {
+  if (!dbInitPromise) {
+    dbInitPromise = initDb().catch((error) => {
       console.error("Failed to initialize database:", error);
-    }
+      dbInitPromise = null;
+    });
   }
+  await dbInitPromise;
 }
 
 async function requireUser() {
@@ -796,20 +795,47 @@ export async function getAnalytics(forOtherUser = false): Promise<AnalyticsData>
   const currentUserId = await requireUser();
   const userId = forOtherUser ? (currentUserId === "user1" ? "user2" : "user1") : currentUserId;
   const today = getISTDateString();
-  const todos = (await sql`SELECT * FROM todos WHERE user_id = ${userId}`) as Todo[];
+
+  const dayOffRows = (await sql`
+    SELECT date, type FROM day_offs WHERE user_id = ${userId}
+  `) as { date: string; type: string }[];
+  const dayOffSet = new Set(dayOffRows.map((d) => d.date));
+
+  const todos = (await sql`SELECT * FROM todos WHERE user_id = ${userId} AND (exclude_from_analytics IS NOT TRUE)`) as Todo[];
   const completions = (await sql`
-    SELECT todo_id, todo_title, task_type, category, completed_date
-    FROM task_completions
-    WHERE user_id = ${userId}
-    ORDER BY completed_date DESC
+    SELECT c.todo_id, c.todo_title, c.task_type, c.category, c.completed_date
+    FROM task_completions c
+    JOIN todos t ON c.todo_id = t.id
+    WHERE c.user_id = ${userId}
+      AND (t.exclude_from_analytics IS NOT TRUE)
+      AND c.completed_date NOT IN (SELECT date FROM day_offs WHERE user_id = ${userId})
+    ORDER BY c.completed_date DESC
   `) as { todo_id: number; todo_title: string; task_type: string; category: string; completed_date: string }[];
 
   const completionDates = new Set(completions.map((item) => item.completed_date));
+
+  // buildDailyAnalytics: for days=7, end at yesterday (today - 1). For others, end at today.
   const buildDailyAnalytics = (days: number) => Array.from({ length: days }, (_, index) => {
       const date = dateFromISTString(today);
-      date.setDate(date.getDate() - (days - 1 - index));
+      const endDateOffset = days === 7 ? 1 : 0;
+      date.setDate(date.getDate() - endDateOffset - (days - 1 - index));
       const key = formatISTDate(date);
+      const isDayOff = dayOffSet.has(key);
       const day = getISTDayOfWeek(date);
+
+      if (isDayOff) {
+        return {
+          date: key,
+          label: days === 7
+            ? new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "Asia/Kolkata" }).format(date)
+            : new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone: "Asia/Kolkata" }).format(date),
+          completed: 0,
+          total: 0,
+          percentage: 100, // Day off doesn't penalize consistency
+          isDayOff: true,
+        };
+      }
+
       const total = todos.filter((todo) => isTaskActiveOnDay(todo.assigned_day, day)).length;
       const completed = completions.filter((item) => item.completed_date === key).length;
       return {
@@ -820,12 +846,13 @@ export async function getAnalytics(forOtherUser = false): Promise<AnalyticsData>
         completed,
         total,
         percentage: total ? Math.min(100, Math.round((completed / total) * 100)) : 0,
+        isDayOff: false,
       };
     });
   const lastSevenDays = buildDailyAnalytics(7);
   const lastThirtyDays = buildDailyAnalytics(30);
 
-  const todayData = lastSevenDays[lastSevenDays.length - 1];
+  const todayData = lastThirtyDays[lastThirtyDays.length - 1]; // Today's data from 30-day range
   const categoryCounts = new Map<string, number>();
   completions.forEach(({ category }) => {
     const value = category?.trim() || "Personal";
@@ -1020,6 +1047,33 @@ export async function editTodo(
   }
 }
 
+export async function toggleTaskExcludeAnalytics(id: number) {
+  try {
+    await ensureDb();
+    const userId = await requireUser();
+    const isOwner = await verifyTaskOwnership(id, userId);
+    if (!isOwner) {
+      return { error: "Unauthorized: You can only modify your own tasks" };
+    }
+
+    const [todo] = (await sql`SELECT exclude_from_analytics FROM todos WHERE id = ${id} AND user_id = ${userId}`) as { exclude_from_analytics?: boolean }[];
+    const newValue = !todo?.exclude_from_analytics;
+
+    await sql`
+      UPDATE todos 
+      SET exclude_from_analytics = ${newValue}
+      WHERE id = ${id} AND user_id = ${userId}
+    `;
+    safeRevalidatePath("/");
+    safeRevalidatePath("/edit-tasks");
+    safeRevalidatePath("/analytics");
+    return { success: true, excludeFromAnalytics: newValue };
+  } catch (error) {
+    console.error("Failed to toggle exclude_from_analytics:", error);
+    return { error: "Failed to update task setting" };
+  }
+}
+
 export async function deleteTodo(id: number) {
   try {
     await ensureDb();
@@ -1075,7 +1129,7 @@ export async function getTaskPerformanceHistory(todoId: number, targetUserId?: s
   try {
     await ensureDb();
     const currentUserId = await requireUser();
-    const userId = targetUserId || currentUserId;
+    const userId = targetUserId === "other" ? (currentUserId === "user1" ? "user2" : "user1") : (targetUserId || currentUserId);
 
     // Fetch todo details
     const [todo] = (await sql`

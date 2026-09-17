@@ -4,14 +4,7 @@ import { sql, initDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { getISTDateString } from "@/lib/time-utils";
 
-export type TimeRange =
-  | "this_week"
-  | "last_week"
-  | "this_month"
-  | "last_month"
-  | "last_30_days"
-  | "last_90_days"
-  | "all_time";
+export type TimeRange = "last_7_days" | "last_30_days" | "all_time";
 
 export interface DateRange {
   startDate: string;
@@ -34,78 +27,27 @@ function getDateRange(range: TimeRange): DateRange {
   const today = new Date();
   const formatIST = (d: Date) => getISTDateString(d);
 
-  if (range === "this_week") {
-    const day = today.getDay();
-    const diffToMon = (day === 0 ? -6 : 1) - day;
-    const mon = new Date(today);
-    mon.setDate(today.getDate() + diffToMon);
+  if (range === "last_7_days") {
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
 
-    const prevMon = new Date(mon);
-    prevMon.setDate(mon.getDate() - 7);
-    const prevSun = new Date(mon);
-    prevSun.setDate(mon.getDate() - 1);
+    const start = new Date(yesterday);
+    start.setDate(yesterday.getDate() - 6);
 
-    return {
-      startDate: formatIST(mon),
-      endDate: formatIST(today),
-      prevStartDate: formatIST(prevMon),
-      prevEndDate: formatIST(prevSun),
-    };
-  }
-
-  if (range === "last_week") {
-    const day = today.getDay();
-    const diffToMon = (day === 0 ? -6 : 1) - day;
-    const thisMon = new Date(today);
-    thisMon.setDate(today.getDate() + diffToMon);
-
-    const lastMon = new Date(thisMon);
-    lastMon.setDate(thisMon.getDate() - 7);
-    const lastSun = new Date(thisMon);
-    lastSun.setDate(thisMon.getDate() - 1);
-
-    const prevLastMon = new Date(lastMon);
-    prevLastMon.setDate(lastMon.getDate() - 7);
-    const prevLastSun = new Date(lastMon);
-    prevLastSun.setDate(lastMon.getDate() - 1);
+    const prevEnd = new Date(start);
+    prevEnd.setDate(start.getDate() - 1);
+    const prevStart = new Date(prevEnd);
+    prevStart.setDate(prevEnd.getDate() - 6);
 
     return {
-      startDate: formatIST(lastMon),
-      endDate: formatIST(lastSun),
-      prevStartDate: formatIST(prevLastMon),
-      prevEndDate: formatIST(prevLastSun),
-    };
-  }
-
-  if (range === "this_month") {
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    const prevFirstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const prevLastDay = new Date(today.getFullYear(), today.getMonth(), 0);
-
-    return {
-      startDate: formatIST(firstDay),
-      endDate: formatIST(today),
-      prevStartDate: formatIST(prevFirstDay),
-      prevEndDate: formatIST(prevLastDay),
-    };
-  }
-
-  if (range === "last_month") {
-    const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
-    const prevFirstDay = new Date(today.getFullYear(), today.getMonth() - 2, 1);
-    const prevLastDay = new Date(today.getFullYear(), today.getMonth() - 1, 0);
-
-    return {
-      startDate: formatIST(firstDay),
-      endDate: formatIST(lastDay),
-      prevStartDate: formatIST(prevFirstDay),
-      prevEndDate: formatIST(prevLastDay),
+      startDate: formatIST(start),
+      endDate: formatIST(yesterday),
+      prevStartDate: formatIST(prevStart),
+      prevEndDate: formatIST(prevEnd),
     };
   }
 
   let days = 30;
-  if (range === "last_90_days") days = 90;
   if (range === "all_time") days = 365;
 
   const start = new Date(today);
@@ -128,6 +70,13 @@ async function requireUser() {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
   return session.userId;
+}
+
+function resolveUserId(currentUserId: string, targetUserId?: string): string {
+  if (targetUserId === "other") {
+    return currentUserId === "user1" ? "user2" : "user1";
+  }
+  return targetUserId || currentUserId;
 }
 
 export interface AllTasksAnalyticsData {
@@ -181,12 +130,12 @@ export interface AllTasksAnalyticsData {
 }
 
 export async function getAllTasksAnalytics(
-  timeRange: TimeRange = "this_week",
+  timeRange: TimeRange = "last_7_days",
   targetUserId?: string
 ): Promise<AllTasksAnalyticsData> {
   await initDb();
   const currentUserId = await requireUser();
-  const userId = targetUserId || currentUserId;
+  const userId = resolveUserId(currentUserId, targetUserId);
   const dates = getDateRange(timeRange);
 
   // 1. Query occurrences for current period
@@ -212,19 +161,44 @@ export async function getAllTasksAnalytics(
 
   // 2. Query occurrences for previous period (for trend & comparison)
   const prevOccurrences = (await sql`
-    SELECT id, todo_id, status
+    SELECT id, todo_id, occurrence_date, status
     FROM task_occurrences
     WHERE user_id = ${userId}
       AND occurrence_date >= ${dates.prevStartDate}
       AND occurrence_date <= ${dates.prevEndDate}
-  `) as { id: number; todo_id: number; status: string }[];
+  `) as { id: number; todo_id: number; occurrence_date: string; status: string }[];
+
+  // Fetch day_offs
+  const dayOffRows = (await sql`
+    SELECT date, type, note FROM day_offs
+    WHERE user_id = ${userId}
+      AND date >= ${dates.prevStartDate}
+      AND date <= ${dates.endDate}
+  `) as { date: string; type: string; note: string }[];
+  const dayOffMap = new Map(dayOffRows.map((d) => [d.date, d.type]));
+
+  // Query user's todos for Performance by Task
+  const userTodos = (await sql`
+    SELECT id, title, category, day_section, exclude_from_analytics FROM todos WHERE user_id = ${userId} ORDER BY sort_order ASC
+  `) as { id: number; title: string; category: string; day_section: string; exclude_from_analytics?: boolean }[];
+
+  const excludedTodoIds = new Set(userTodos.filter((t) => t.exclude_from_analytics).map((t) => t.id));
+  const activeTodos = userTodos.filter((t) => !t.exclude_from_analytics);
+
+  // Filter current & prev occurrences
+  const validCurrentOccurrences = currentOccurrences.filter(
+    (o) => !dayOffMap.has(o.occurrence_date) && !excludedTodoIds.has(o.todo_id)
+  );
+  const validPrevOccurrences = prevOccurrences.filter(
+    (o) => !dayOffMap.has(o.occurrence_date) && !excludedTodoIds.has(o.todo_id)
+  );
 
   // Total counts for current period
-  const totalTasksDue = currentOccurrences.length;
-  const completedCount = currentOccurrences.filter((o) => o.status === "completed").length;
-  const skippedCount = currentOccurrences.filter((o) => o.status === "skipped").length;
-  const rescheduledCount = currentOccurrences.filter((o) => o.status === "rescheduled").length;
-  const noActionCount = currentOccurrences.filter((o) => o.status === "no_action").length;
+  const totalTasksDue = validCurrentOccurrences.length;
+  const completedCount = validCurrentOccurrences.filter((o) => o.status === "completed").length;
+  const skippedCount = validCurrentOccurrences.filter((o) => o.status === "skipped").length;
+  const rescheduledCount = validCurrentOccurrences.filter((o) => o.status === "rescheduled").length;
+  const noActionCount = validCurrentOccurrences.filter((o) => o.status === "no_action").length;
 
   const overallConsistency = totalTasksDue > 0 ? Math.round((completedCount / totalTasksDue) * 100) : 0;
   const completedPercentage = overallConsistency;
@@ -233,16 +207,16 @@ export async function getAllTasksAnalytics(
   const noActionPercentage = totalTasksDue > 0 ? Math.round((noActionCount / totalTasksDue) * 100) : 0;
 
   // Previous period consistency comparison
-  const prevTotal = prevOccurrences.length;
-  const prevCompleted = prevOccurrences.filter((o) => o.status === "completed").length;
+  const prevTotal = validPrevOccurrences.length;
+  const prevCompleted = validPrevOccurrences.filter((o) => o.status === "completed").length;
   const prevConsistency = prevTotal > 0 ? Math.round((prevCompleted / prevTotal) * 100) : 0;
   const consistencyChange = overallConsistency - prevConsistency;
 
   // 3. Build Completion Trend points (daily or aggregated)
-  const completionTrend: { label: string; date: string; percentage: number }[] = [];
+  const completionTrend: { label: string; date: string; percentage: number; isDayOff?: boolean }[] = [];
   const occurrencesByDate: Record<string, { total: number; completed: number }> = {};
 
-  currentOccurrences.forEach((o) => {
+  validCurrentOccurrences.forEach((o) => {
     if (!occurrencesByDate[o.occurrence_date]) {
       occurrencesByDate[o.occurrence_date] = { total: 0, completed: 0 };
     }
@@ -260,20 +234,20 @@ export async function getAllTasksAnalytics(
     datesList.forEach((d) => {
       const parts = d.split("-");
       const dayLabel = parts.length === 3 ? `${parts[1]}/${parts[2]}` : d;
-      const stats = occurrencesByDate[d];
-      const pct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-      completionTrend.push({ label: dayLabel, date: d, percentage: pct });
+      if (dayOffMap.has(d)) {
+        completionTrend.push({ label: dayLabel, date: d, percentage: 100, isDayOff: true });
+      } else {
+        const stats = occurrencesByDate[d];
+        const pct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+        completionTrend.push({ label: dayLabel, date: d, percentage: pct, isDayOff: false });
+      }
     });
   }
 
-  // 4. Query user's todos for Performance by Task
-  const userTodos = (await sql`
-    SELECT id, title, category, day_section FROM todos WHERE user_id = ${userId} ORDER BY sort_order ASC
-  `) as { id: number; title: string; category: string; day_section: string }[];
-
-  const performanceByTask = userTodos.map((todo) => {
-    const taskOccs = currentOccurrences.filter((o) => o.todo_id === todo.id);
-    const prevTaskOccs = prevOccurrences.filter((o) => o.todo_id === todo.id);
+  // 4. Performance by Task
+  const performanceByTask = activeTodos.map((todo) => {
+    const taskOccs = validCurrentOccurrences.filter((o) => o.todo_id === todo.id);
+    const prevTaskOccs = validPrevOccurrences.filter((o) => o.todo_id === todo.id);
 
     const taskTotal = taskOccs.length;
     const taskCompleted = taskOccs.filter((o) => o.status === "completed").length;
@@ -480,12 +454,12 @@ export interface IndividualTaskAnalyticsData {
 
 export async function getIndividualTaskAnalytics(
   taskId: number,
-  timeRange: TimeRange = "last_30_days",
+  timeRange: TimeRange = "last_7_days",
   targetUserId?: string
 ): Promise<IndividualTaskAnalyticsData> {
   await initDb();
   const currentUserId = await requireUser();
-  const userId = targetUserId || currentUserId;
+  const userId = resolveUserId(currentUserId, targetUserId);
   const dates = getDateRange(timeRange);
 
   // Fetch task info
@@ -520,24 +494,36 @@ export async function getIndividualTaskAnalytics(
     completions.forEach((c) => occurrences.push(c));
   }
 
-  // Previous occurrences for rate change comparison
+  // Fetch previous occurrences for rate change comparison
   const prevOccurrences = (await sql`
-    SELECT id, status
+    SELECT id, status, occurrence_date
     FROM task_occurrences
     WHERE user_id = ${userId} AND todo_id = ${taskId}
       AND occurrence_date >= ${dates.prevStartDate}
       AND occurrence_date <= ${dates.prevEndDate}
   `) as any[];
 
-  const totalOccurrences = occurrences.length;
-  const completedCount = occurrences.filter((o) => o.status === "completed").length;
-  const skippedCount = occurrences.filter((o) => o.status === "skipped").length;
-  const rescheduledCount = occurrences.filter((o) => o.status === "rescheduled").length;
-  const noActionCount = occurrences.filter((o) => o.status === "no_action").length;
+  // Fetch day_offs
+  const dayOffRows = (await sql`
+    SELECT date FROM day_offs
+    WHERE user_id = ${userId}
+      AND date >= ${dates.prevStartDate}
+      AND date <= ${dates.endDate}
+  `) as { date: string }[];
+  const dayOffSet = new Set(dayOffRows.map((d) => d.date));
+
+  const validOccurrences = occurrences.filter((o) => !dayOffSet.has(o.occurrence_date));
+  const validPrevOccurrences = prevOccurrences.filter((o) => !dayOffSet.has(o.occurrence_date));
+
+  const totalOccurrences = validOccurrences.length;
+  const completedCount = validOccurrences.filter((o) => o.status === "completed").length;
+  const skippedCount = validOccurrences.filter((o) => o.status === "skipped").length;
+  const rescheduledCount = validOccurrences.filter((o) => o.status === "rescheduled").length;
+  const noActionCount = validOccurrences.filter((o) => o.status === "no_action").length;
 
   const completionRate = totalOccurrences > 0 ? Math.round((completedCount / totalOccurrences) * 100) : 0;
-  const prevTotal = prevOccurrences.length;
-  const prevCompleted = prevOccurrences.filter((o) => o.status === "completed").length;
+  const prevTotal = validPrevOccurrences.length;
+  const prevCompleted = validPrevOccurrences.filter((o) => o.status === "completed").length;
   const prevRate = prevTotal > 0 ? Math.round((prevCompleted / prevTotal) * 100) : 0;
   const rateChange = completionRate - prevRate;
 

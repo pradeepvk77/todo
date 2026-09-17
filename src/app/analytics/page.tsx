@@ -24,7 +24,7 @@ export default async function AnalyticsPage({
   const friendNickname = await getFriendNicknamePreference();
   const otherUserName = friendNickname || defaultOtherUserName;
 
-  const range: TimeRange = (resolvedParams.range as TimeRange) || (resolvedParams.taskId ? "last_30_days" : "this_week");
+  const range: TimeRange = (resolvedParams.range as TimeRange) || "last_7_days";
   const taskId = resolvedParams.taskId ? parseInt(resolvedParams.taskId, 10) : null;
 
   let initialAllData = null;
@@ -34,7 +34,7 @@ export default async function AnalyticsPage({
     try {
       initialTaskData = await getIndividualTaskAnalytics(taskId, range, targetUserId);
     } catch {
-      initialAllData = await getAllTasksAnalytics("this_week", targetUserId);
+      initialAllData = await getAllTasksAnalytics("last_7_days", targetUserId);
     }
   } else {
     initialAllData = await getAllTasksAnalytics(range, targetUserId);

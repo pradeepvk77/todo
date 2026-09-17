@@ -28,9 +28,8 @@ interface IndividualTaskAnalyticsProps {
 }
 
 const TIME_RANGES: { key: TimeRange; label: string }[] = [
+  { key: "last_7_days", label: "Last 7 Days" },
   { key: "last_30_days", label: "Last 30 Days" },
-  { key: "this_week", label: "7 Days" },
-  { key: "last_90_days", label: "90 Days" },
   { key: "all_time", label: "All Time" },
 ];
 

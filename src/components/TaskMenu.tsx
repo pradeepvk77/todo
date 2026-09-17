@@ -6,7 +6,15 @@ import { BarChart3, BookOpen, ClipboardList, LogOut, MoreVertical, Pencil, Setti
 import Link from "next/link";
 import { logoutAction } from "@/app/actions/auth";
 
-export function TaskMenu({ otherUser = false, otherUserName }: { otherUser?: boolean; otherUserName: string }) {
+export function TaskMenu({
+  otherUser = false,
+  otherUserName,
+  onOpenDayOff,
+}: {
+  otherUser?: boolean;
+  otherUserName: string;
+  onOpenDayOff?: () => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
@@ -76,6 +84,20 @@ export function TaskMenu({ otherUser = false, otherUserName }: { otherUser?: boo
               <Pencil className="size-4" />
               Edit tasks
             </Link>
+          )}
+          {!otherUser && onOpenDayOff && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                closeMenu();
+                onOpenDayOff();
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
+            >
+              <span className="text-sm">🏖️</span>
+              <span>Manage days off</span>
+            </button>
           )}
           {!otherUser && (
             <Link

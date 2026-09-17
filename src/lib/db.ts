@@ -61,6 +61,18 @@ export interface Todo {
   note?: string;
   scheduled_date?: string;
   scheduled_time?: string;
+  exclude_from_analytics?: boolean;
+}
+
+export type DayOffType = "day_off" | "leave" | "sick" | "holiday" | "rest_day";
+
+export interface DayOff {
+  id: number;
+  user_id: string;
+  date: string;
+  type: DayOffType;
+  note?: string;
+  created_at: string;
 }
 
 export interface TaskOccurrence {
@@ -187,6 +199,27 @@ export async function initDb() {
   await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''`;
   await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS scheduled_date TEXT DEFAULT ''`;
   await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS scheduled_time TEXT DEFAULT ''`;
+  try {
+    await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS exclude_from_analytics BOOLEAN DEFAULT FALSE`;
+  } catch {}
+
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS day_offs (
+        id          SERIAL PRIMARY KEY,
+        user_id     TEXT NOT NULL,
+        date        TEXT NOT NULL,
+        type        TEXT NOT NULL DEFAULT 'day_off',
+        note        TEXT DEFAULT '',
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT day_offs_user_date_uidx UNIQUE (user_id, date)
+      )
+    `;
+  } catch {}
+
+  try {
+    await sql`CREATE INDEX IF NOT EXISTS day_offs_user_date_idx ON day_offs (user_id, date)`;
+  } catch {}
 
   await sql`
     CREATE TABLE IF NOT EXISTS task_completions (

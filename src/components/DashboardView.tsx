@@ -11,7 +11,8 @@ import { DailyWordStrip } from "@/components/DailyWordStrip";
 import { RunningTaskCard } from "@/components/RunningTaskCard";
 import { TodoList } from "@/components/TodoList";
 import { YouTodoList } from "@/components/YouTodoList";
-import { ListTodo, ChevronDown, ChevronUp, Pencil, PartyPopper, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
+import { DayOffModal } from "@/components/DayOffModal";
+import { ListTodo, ChevronDown, ChevronUp, Pencil, PartyPopper, CheckCircle2, AlertCircle, ArrowRight, Sun, Palmtree } from "lucide-react";
 import Link from "next/link";
 
 interface DashboardViewProps {
@@ -30,6 +31,7 @@ export function DashboardView({
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [unreviewed, setUnreviewed] = useState<UnreviewedOccurence[]>([]);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [isDayOffOpen, setIsDayOffOpen] = useState(false);
   const allTasksRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,6 +62,12 @@ export function DashboardView({
 
   return (
     <div className="space-y-4">
+      {/* DAY OFF MODAL */}
+      <DayOffModal
+        isOpen={isDayOffOpen}
+        onClose={() => setIsDayOffOpen(false)}
+      />
+
       {/* NEXT-DAY MISSED TASK REVIEW BANNER (IF UNREVIEWED MISSED TASKS EXIST) */}
       {!viewingOtherUser && unreviewed.length > 0 && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 sm:p-4 flex items-center justify-between gap-3 shadow-2xs">
@@ -100,7 +108,11 @@ export function DashboardView({
       {/* 1. GREETING & HEADER */}
       <header className="flex items-center justify-between gap-4 pb-3 border-b border-border/70 w-full">
         <Greeting userName={viewingOtherUser ? otherUserName : ""} />
-        <TaskMenu otherUserName={otherUserName} otherUser={viewingOtherUser} />
+        <TaskMenu
+          otherUserName={otherUserName}
+          otherUser={viewingOtherUser}
+          onOpenDayOff={() => setIsDayOffOpen(true)}
+        />
       </header>
 
       {/* 2. QUOTE */}

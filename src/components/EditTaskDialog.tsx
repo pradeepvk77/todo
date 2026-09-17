@@ -43,6 +43,7 @@ export function EditTaskDialog({ todo, open, onOpenChange }: EditTaskDialogProps
   const [selectedDays, setSelectedDays] = useState<string[]>(parseInitialDays(todo.assigned_day));
   const [initialValue, setInitialValue] = useState(todo.type_value);
   const [category, setCategory] = useState(todo.category || "Personal");
+  const [excludeFromAnalytics, setExcludeFromAnalytics] = useState(Boolean(todo.exclude_from_analytics));
   const [isPending, startTransition] = useTransition();
 
   const timeOptions = generate15MinTimeOptions();
@@ -103,6 +104,11 @@ export function EditTaskDialog({ todo, open, onOpenChange }: EditTaskDialogProps
         assigned_day: assignedDayValue,
         category,
       });
+
+      if (excludeFromAnalytics !== Boolean(todo.exclude_from_analytics)) {
+        const { toggleTaskExcludeAnalytics } = await import("@/app/actions");
+        await toggleTaskExcludeAnalytics(todo.id);
+      }
 
       onOpenChange(false);
     });
@@ -227,6 +233,25 @@ export function EditTaskDialog({ todo, open, onOpenChange }: EditTaskDialogProps
               </Select>
             </div>
           )}
+
+          {/* Exclude from Analytics Toggle */}
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40">
+            <div>
+              <Label htmlFor="exclude-analytics" className="text-xs font-semibold text-foreground block cursor-pointer">
+                Exclude from Analytics
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                For routine tasks (e.g. Lunch, Dinner, Reach home) that shouldn&apos;t affect completion scores.
+              </p>
+            </div>
+            <input
+              id="exclude-analytics"
+              type="checkbox"
+              checked={excludeFromAnalytics}
+              onChange={(e) => setExcludeFromAnalytics(e.target.checked)}
+              className="size-4 rounded-xs border-input text-primary focus:ring-primary cursor-pointer"
+            />
+          </div>
 
           <DialogFooter className="pt-2">
             <Button

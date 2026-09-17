@@ -21,6 +21,8 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { DayOffModal } from "@/components/DayOffModal";
+
 interface AllTasksAnalyticsProps {
   initialData: AllTasksAnalyticsData;
   onSelectTimeRange: (range: TimeRange) => void;
@@ -30,12 +32,8 @@ interface AllTasksAnalyticsProps {
 }
 
 const TIME_RANGES: { key: TimeRange; label: string }[] = [
-  { key: "this_week", label: "This Week" },
-  { key: "last_week", label: "Last Week" },
-  { key: "this_month", label: "This Month" },
-  { key: "last_month", label: "Last Month" },
+  { key: "last_7_days", label: "Last 7 Days" },
   { key: "last_30_days", label: "Last 30 Days" },
-  { key: "last_90_days", label: "Last 90 Days" },
   { key: "all_time", label: "All Time" },
 ];
 
@@ -48,6 +46,7 @@ export function AllTasksAnalytics({
 }: AllTasksAnalyticsProps) {
   const router = useRouter();
   const [selectedRange, setSelectedRange] = useState<TimeRange>(initialData.timeRange);
+  const [isDayOffOpen, setIsDayOffOpen] = useState(false);
   const data = initialData;
 
   const handleRangeChange = (range: TimeRange) => {
@@ -79,6 +78,12 @@ export function AllTasksAnalytics({
 
   return (
     <div className="space-y-5">
+      <DayOffModal
+        isOpen={isDayOffOpen}
+        onClose={() => setIsDayOffOpen(false)}
+        onUpdate={() => onSelectTimeRange(selectedRange)}
+      />
+
       {/* SECTION 1: HEADER & TIME RANGE SELECTOR */}
       <div className="flex justify-between items-center gap-3 pb-3 border-b border-border/70">
         <div>
@@ -89,17 +94,28 @@ export function AllTasksAnalytics({
             Understand your progress and build a better you.
           </p>
         </div>
-        <Link href="/">
-          <button className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors cursor-pointer px-2.5 py-1.5 rounded-xl border border-border/80 bg-card hover:bg-muted shadow-2xs">
-            <ArrowLeft className="size-4" />
-            <span>Back</span>
-          </button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {!isOtherUser && (
+            <button
+              onClick={() => setIsDayOffOpen(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-colors cursor-pointer px-3 py-1.5 rounded-xl border border-amber-500/30 shadow-2xs"
+            >
+              <span>🏖️</span>
+              <span>Manage Days Off</span>
+            </button>
+          )}
+          <Link href="/">
+            <button className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors cursor-pointer px-2.5 py-1.5 rounded-xl border border-border/80 bg-card hover:bg-muted shadow-2xs">
+              <ArrowLeft className="size-4" />
+              <span>Back</span>
+            </button>
+          </Link>
+        </div>
       </div>
 
       {/* TIME RANGE PILL TABS */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs font-bold">
-        {TIME_RANGES.slice(0, 5).map((r) => (
+        {TIME_RANGES.map((r) => (
           <button
             key={r.key}
             onClick={() => handleRangeChange(r.key)}
@@ -277,10 +293,18 @@ export function AllTasksAnalytics({
               {trendPoints.map((item, idx) => {
                 if (!points[idx]) return null;
                 const [x, y] = points[idx].split(",");
+                const isDayOff = (item as any).isDayOff;
                 return (
                   <g key={idx}>
-                    <circle cx={x} cy={y} r="4" fill="#10b981" stroke="#ffffff" strokeWidth="2">
-                      <title>{`${item.label}: ${item.percentage}%`}</title>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={isDayOff ? "5" : "4"}
+                      fill={isDayOff ? "#f59e0b" : "#10b981"}
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                    >
+                      <title>{isDayOff ? `${item.label}: Day Off 🏖️` : `${item.label}: ${item.percentage}%`}</title>
                     </circle>
                     <text x={x} y={chartHeight - 4} textAnchor="middle" fill="#9ca3af" fontSize="9" fontWeight="600">
                       {item.label}

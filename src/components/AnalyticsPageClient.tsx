@@ -27,7 +27,7 @@ export function AnalyticsPageClient({
   isOtherUser = false,
   otherUserName = "User",
   initialTaskId = null,
-  initialTimeRange = "this_week",
+  initialTimeRange = "last_7_days",
 }: AnalyticsPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
