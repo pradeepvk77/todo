@@ -37,6 +37,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "v1.2",
+    title: "Complete History, Slide Carousel & Task Analytics Upgrades 🚀",
+    releaseDate: "2026-09-23",
+    releaseType: "major",
+    features: [
+      "Added Complete History feature to fill missing historical task performance within a 5-day window",
+      "Added Auto Carousel Slide transition for smooth task switching and completion animations",
+      "Added Direct Task Analytics link to open task-specific insights instantly from your running task card",
+      "Added Today's Friend Comparison card on the dashboard to compare progress with your friend in real time",
+      "Added Clear DB Alerts reset control in Settings to fix and refresh push notifications with one click",
+      "Enforced mandatory actual quantitative values while preserving historical target snapshots",
+    ],
+    sendPushNotification: true,
+  },
+  {
     version: "v1.1",
     title: "New Features & Analytics Upgrades 🚀",
     releaseDate: "2026-09-17",
