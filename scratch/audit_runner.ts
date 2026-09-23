@@ -129,7 +129,7 @@ async function main() {
       AND constraint_type = 'FOREIGN KEY'
       AND constraint_name = 'fk_task_completions_todo_id'
   `);
-  console.log(`Foreign key constraint exists: ${fkRes.rowCount > 0 ? "YES" : "NO"}`);
+  console.log(`Foreign key constraint exists: ${(fkRes.rowCount ?? 0) > 0 ? "YES" : "NO"}`);
 
   console.log("\n==================================================");
   console.log("STEP 11: ALL TIME DATES");

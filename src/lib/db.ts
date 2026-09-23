@@ -62,6 +62,8 @@ export interface Todo {
   scheduled_date?: string;
   scheduled_time?: string;
   exclude_from_analytics?: boolean;
+  target_value?: number | null;
+  unit?: string | null;
 }
 
 export type DayOffType = "day_off" | "leave" | "sick" | "holiday" | "rest_day";
@@ -83,6 +85,9 @@ export interface TaskOccurrence {
   status: OccurrenceStatus;
   scheduled_time?: string;
   completed_at?: string;
+  target_value?: number | null;
+  completed_value?: number | null;
+  unit?: string | null;
   skipped_at?: string;
   rescheduled_at?: string;
   rescheduled_to_date?: string;

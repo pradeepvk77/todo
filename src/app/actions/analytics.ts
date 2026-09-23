@@ -29,7 +29,72 @@ import {
   getTimeOfDaySection,
   parseScheduledTimeToMinutes,
   parseTimestampToISTMinutes,
+  calculateProgressTrend,
+  calculateTargetGap,
+  deriveTaskInsights,
+  generatePeriodSummary,
+  generateFocusAreas,
+  TargetGapData,
+  ProgressInsight,
+  PeriodSummaryData,
 } from "@/lib/analytics-utils";
+
+export type { TargetGapData, ProgressInsight, PeriodSummaryData };
+
+// ─── Progress Analytics Interfaces ───────────────────────────────────────────
+
+/** One completed occurrence that has a quantitative value record. */
+interface ProgressPoint {
+  date: string;                   // occurrence_date (YYYY-MM-DD)
+  targetValue: number | null;     // target_value snapshot stored on THAT occurrence
+  completedValue: number | null;  // actual value the user entered
+  unit: string | null;            // unit stored on that occurrence
+  completedAt: string | null;     // ISO timestamp of completion
+}
+
+/**
+ * Quantitative progress summary for a measurable task.
+ * Only present when isMeasurable === true and at least one real completed_value exists.
+ */
+export interface ProgressAnalyticsData {
+  /** True when task_type is input/number AND at least one non-null completed_value exists. */
+  isMeasurable: boolean;
+  /** Effective unit for this task. Empty-string bare-number tasks use '' here; UI shows "units". */
+  unit: string;
+  /** Chronological list of completed occurrences with quantitative data. */
+  history: ProgressPoint[];
+  /** First valid completed_value in the selected range. */
+  startingValue: number | null;
+  /** Most recent valid completed_value in the selected range. */
+  currentValue: number | null;
+  /** Mean of all valid completed_values. */
+  averageValue: number | null;
+  /** Maximum valid completed_value. */
+  personalBest: number | null;
+  /** Sum of all valid completed_values. */
+  totalValue: number | null;
+  /** Current configured target from todos (for reference). */
+  targetValue: number | null;
+  /** currentValue - startingValue. Null when < 2 values. */
+  absoluteChange: number | null;
+  /** ((currentValue - startingValue) / startingValue) * 100. Null when < 2 values or startingValue === 0. */
+  percentageChange: number | null;
+  /**
+   * Average of (completedValue / targetValue * 100) for records where both fields are non-null.
+   * Null when no such records exist.
+   */
+  targetAchievementRate: number | null;
+  /** Trend direction. Requires >= 5 valid values; otherwise 'insufficient_data'. */
+  trend: "improving" | "declining" | "stable" | "insufficient_data";
+  /** Human-readable explanation of the trend calculation for display in the UI. */
+  trendReason: string;
+  /** Target gap analysis based on historical target snapshots. */
+  targetGap: TargetGapData | null;
+  /** Deterministic task-level progress insights. */
+  insights: ProgressInsight[];
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 function getDateRange(range: TimeRange, includeToday: boolean = false, minDate?: string): DateRange {
   const today = new Date();
@@ -131,6 +196,10 @@ export interface AllTasksAnalyticsData {
     change: number;
     type: "improving" | "declining";
   }[];
+  /** Phase 3: Deterministic summary for the selected analytics date range. */
+  periodSummary: PeriodSummaryData;
+  /** Phase 3: Deterministic data-based focus area observations. */
+  focusAreas: ProgressInsight[];
 }
 
 export async function getAllTasksAnalytics(
@@ -194,8 +263,8 @@ export async function getAllTasksAnalytics(
 
   // Query user's todos for Performance by Task
   const userTodos = (await sql`
-    SELECT id, title, category, day_section, exclude_from_analytics FROM todos WHERE user_id = ${userId} ORDER BY sort_order ASC
-  `) as { id: number; title: string; category: string; day_section: string; exclude_from_analytics?: boolean }[];
+    SELECT id, title, category, day_section, task_type, unit, exclude_from_analytics FROM todos WHERE user_id = ${userId} ORDER BY sort_order ASC
+  `) as { id: number; title: string; category: string; day_section: string; task_type?: string; unit?: string; exclude_from_analytics?: boolean }[];
 
   const excludedTodoIds = new Set(userTodos.filter((t) => t.exclude_from_analytics).map((t) => t.id));
   const activeTodos = userTodos.filter((t) => !t.exclude_from_analytics);
@@ -392,6 +461,109 @@ export async function getAllTasksAnalytics(
     }))
     .slice(0, 4);
 
+  // 9. Phase 3: Period Summary & Focus Areas Calculation
+  const quantRows = (await sql`
+    SELECT
+      todo_id,
+      occurrence_date,
+      completed_value,
+      target_value,
+      unit
+    FROM task_occurrences
+    WHERE user_id = ${userId}
+      AND status = 'completed'
+      AND completed_value IS NOT NULL
+      AND occurrence_date >= ${dates.startDate}
+      AND occurrence_date <= ${dates.endDate}
+    ORDER BY occurrence_date ASC
+  `) as {
+    todo_id: number;
+    occurrence_date: string;
+    completed_value: string | number | null;
+    target_value: string | number | null;
+    unit: string | null;
+  }[];
+
+  const quantByTodo: Record<
+    number,
+    { date: string; completedValue: number; targetValue: number | null; unit: string | null }[]
+  > = {};
+
+  quantRows.forEach((r) => {
+    if (!quantByTodo[r.todo_id]) quantByTodo[r.todo_id] = [];
+    quantByTodo[r.todo_id].push({
+      date: r.occurrence_date,
+      completedValue: parseFloat(String(r.completed_value)),
+      targetValue: r.target_value !== null ? parseFloat(String(r.target_value)) : null,
+      unit: r.unit ?? null,
+    });
+  });
+
+  let improvingCount = 0;
+  let decliningCount = 0;
+  let stableCount = 0;
+  let insufficientDataCount = 0;
+  let measurableTaskCount = 0;
+
+  const taskSummaries = activeTodos.map((todo) => {
+    const taskOccs = validCurrentOccurrences.filter((o) => o.todo_id === todo.id);
+    const taskTotal = taskOccs.length;
+    const taskCompleted = taskOccs.filter((o) => o.status === "completed").length;
+    const currentRate = taskTotal > 0 ? Math.round((taskCompleted / taskTotal) * 100) : 0;
+
+    const isMeasurableType = todo.task_type === "input" || todo.task_type === "number";
+    const history = quantByTodo[todo.id] || [];
+    const isMeasurable = isMeasurableType && history.length > 0;
+
+    let targetGap: TargetGapData | null = null;
+    let trend: "improving" | "declining" | "stable" | "insufficient_data" = "insufficient_data";
+    let trendReason = "No quantitative records found in the selected date range.";
+    let averageValue: number | null = null;
+
+    if (isMeasurable) {
+      measurableTaskCount++;
+      const values = history.map((h) => h.completedValue);
+      averageValue = Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 100) / 100;
+      targetGap = calculateTargetGap(history);
+      const res = calculateProgressTrend(values);
+      trend = res.trend;
+      trendReason = res.reason;
+
+      if (trend === "improving") improvingCount++;
+      else if (trend === "declining") decliningCount++;
+      else if (trend === "stable") stableCount++;
+      else insufficientDataCount++;
+    }
+
+    return {
+      taskId: todo.id,
+      taskTitle: todo.title,
+      completionRate: currentRate,
+      totalOccurrences: taskTotal,
+      isMeasurable,
+      historyCount: history.length,
+      targetGap,
+      trend,
+      trendReason,
+      averageValue,
+      unit: todo.unit || "",
+    };
+  });
+
+  const periodSummary = generatePeriodSummary({
+    totalTasksDue,
+    completedCount,
+    measurableTasksStats: {
+      totalMeasurable: measurableTaskCount,
+      improving: improvingCount,
+      declining: decliningCount,
+      stable: stableCount,
+      insufficientData: insufficientDataCount,
+    },
+  });
+
+  const focusAreas = generateFocusAreas({ taskSummaries });
+
   return {
     timeRange,
     includeToday,
@@ -424,6 +596,8 @@ export async function getAllTasksAnalytics(
       longestBest,
     },
     recentImprovements,
+    periodSummary,
+    focusAreas,
   };
 }
 
@@ -474,6 +648,8 @@ export interface IndividualTaskAnalyticsData {
     rescheduledTo?: string;
   }[];
   notesHistory: { date: string; note: string }[];
+  /** Present when task is measurable and has at least one real quantitative record. */
+  progressData?: ProgressAnalyticsData | null;
 }
 
 export async function getIndividualTaskAnalytics(
@@ -760,6 +936,184 @@ export async function getIndividualTaskAnalytics(
       note: o.missed_reason_notes || todo.note || "Completed session.",
     }));
 
+  // ─── Phase 2: Progress Analytics ───────────────────────────────────────────
+  let progressData: ProgressAnalyticsData | null = null;
+
+  const isMeasurableType = todo.task_type === "input" || todo.task_type === "number";
+
+  if (isMeasurableType) {
+    // Query completed occurrences WITH quantitative data for this task in the date range.
+    // Crucially: we use the target_value stored ON EACH OCCURRENCE (historical snapshot),
+    // NOT todos.target_value (which reflects only the current configured target).
+    const progressRows = (await sql`
+      SELECT
+        occurrence_date,
+        completed_value,
+        target_value,
+        unit,
+        completed_at
+      FROM task_occurrences
+      WHERE user_id = ${userId}
+        AND todo_id = ${taskId}
+        AND status = 'completed'
+        AND completed_value IS NOT NULL
+        AND occurrence_date >= ${dates.startDate}
+        AND occurrence_date <= ${dates.endDate}
+      ORDER BY occurrence_date ASC
+    `) as {
+      occurrence_date: string;
+      completed_value: string | number | null;
+      target_value: string | number | null;
+      unit: string | null;
+      completed_at: string | null;
+    }[];
+
+    // Parse numeric fields (pg driver may return strings for NUMERIC columns)
+    const history: ProgressPoint[] = progressRows.map((r) => ({
+      date: r.occurrence_date,
+      completedValue: r.completed_value !== null ? parseFloat(String(r.completed_value)) : null,
+      targetValue: r.target_value !== null ? parseFloat(String(r.target_value)) : null,
+      unit: r.unit ?? null,
+      completedAt: r.completed_at ?? null,
+    }));
+
+    // Only mark measurable when there is at least one real completed_value
+    const isMeasurable = history.length > 0;
+
+    if (isMeasurable) {
+      // Collect valid numeric values for metrics (all are non-null by query filter)
+      const values = history.map((h) => h.completedValue as number);
+
+      const startingValue = values[0];
+      const currentValue = values[values.length - 1];
+      const averageValue = Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 100) / 100;
+      const personalBest = Math.max(...values);
+      const totalValue = Math.round(values.reduce((s, v) => s + v, 0) * 100) / 100;
+
+      // Absolute and percentage change (require >= 2 values)
+      let absoluteChange: number | null = null;
+      let percentageChange: number | null = null;
+      if (values.length >= 2) {
+        absoluteChange = Math.round((currentValue - startingValue) * 100) / 100;
+        if (startingValue !== 0) {
+          percentageChange = Math.round(((currentValue - startingValue) / startingValue) * 10000) / 100;
+        }
+        // If startingValue === 0, percentageChange remains null (avoid division by zero)
+      }
+
+      // Target achievement rate: avg of (completedValue / historicalTargetValue * 100)
+      // Uses HISTORICAL target snapshot stored on each occurrence — not the current todos.target_value
+      const achievementPairs = history.filter(
+        (h) => h.targetValue !== null && h.targetValue > 0 && h.completedValue !== null
+      );
+      let targetAchievementRate: number | null = null;
+      if (achievementPairs.length > 0) {
+        const totalAchievement = achievementPairs.reduce(
+          (s, h) => s + ((h.completedValue as number) / (h.targetValue as number)) * 100,
+          0
+        );
+        targetAchievementRate = Math.round((totalAchievement / achievementPairs.length) * 10) / 10;
+      }
+
+      // Determine effective unit from historical records (most common non-empty unit)
+      const unitCounts: Record<string, number> = {};
+      history.forEach((h) => {
+        const u = h.unit ?? "";
+        unitCounts[u] = (unitCounts[u] || 0) + 1;
+      });
+      // Prefer non-empty unit; fallback to todos.unit; then empty string
+      const sortedUnits = Object.entries(unitCounts).sort((a, b) => b[1] - a[1]);
+      const dominantUnit =
+        sortedUnits.find(([u]) => u !== "")?.[0] ??
+        (todo.unit && todo.unit !== "" ? todo.unit : "");
+
+      // Trend calculation using the pure utility function
+      const { trend, reason: trendReason } = calculateProgressTrend(values);
+
+      // Phase 3: Target Gap calculation
+      const targetGap = calculateTargetGap(history);
+
+      // Phase 3: Task-level deterministic insights
+      const insights = deriveTaskInsights({
+        taskTitle: todo.title,
+        isMeasurable: true,
+        completionRate,
+        completedCount,
+        totalOccurrences,
+        history,
+        startingValue,
+        currentValue,
+        averageValue,
+        personalBest,
+        unit: dominantUnit,
+        trend,
+        trendReason,
+        targetGap,
+      });
+
+      progressData = {
+        isMeasurable: true,
+        unit: dominantUnit,
+        history,
+        startingValue,
+        currentValue,
+        averageValue,
+        personalBest,
+        totalValue,
+        targetValue: todo.target_value !== null && todo.target_value !== undefined
+          ? parseFloat(String(todo.target_value))
+          : null,
+        absoluteChange,
+        percentageChange,
+        targetAchievementRate,
+        trend,
+        trendReason,
+        targetGap,
+        insights,
+      };
+    } else {
+      // Measurable type but no quantitative records in this range
+      const insights = deriveTaskInsights({
+        taskTitle: todo.title,
+        isMeasurable: false,
+        completionRate,
+        completedCount,
+        totalOccurrences,
+        history: [],
+        startingValue: null,
+        currentValue: null,
+        averageValue: null,
+        personalBest: null,
+        unit: todo.unit ?? "",
+        trend: "insufficient_data",
+        trendReason: "No quantitative records found in the selected date range.",
+        targetGap: null,
+      });
+
+      progressData = {
+        isMeasurable: false,
+        unit: todo.unit ?? "",
+        history: [],
+        startingValue: null,
+        currentValue: null,
+        averageValue: null,
+        personalBest: null,
+        totalValue: null,
+        targetValue: todo.target_value !== null && todo.target_value !== undefined
+          ? parseFloat(String(todo.target_value))
+          : null,
+        absoluteChange: null,
+        percentageChange: null,
+        targetAchievementRate: null,
+        trend: "insufficient_data",
+        trendReason: "No quantitative records found in the selected date range.",
+        targetGap: null,
+        insights,
+      };
+    }
+  }
+  // For time/checkbox tasks: progressData remains null — no progress section shown.
+
   return {
     taskId: todo.id,
     taskTitle: todo.title,
@@ -794,5 +1148,6 @@ export async function getIndividualTaskAnalytics(
     reschedulePercentage: totalOccurrences > 0 ? Math.round((rescheduledCount / totalOccurrences) * 100) : 0,
     recentActivity,
     notesHistory,
+    progressData,
   };
 }

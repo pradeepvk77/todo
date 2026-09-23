@@ -263,6 +263,81 @@ export function AllTasksAnalytics({
         </div>
       </div>
 
+      {/* PHASE 3: PERIOD SUMMARY & FOCUS AREAS ROW */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {/* PERIOD SUMMARY */}
+        <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
+              <Calendar className="size-4 text-emerald-600" />
+              <span>Period Summary</span>
+            </h3>
+            <span className="text-[11px] font-bold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
+              {data.startDate} to {data.endDate}
+            </span>
+          </div>
+
+          <p className="text-xs text-foreground/90 font-medium leading-relaxed">
+            {data.periodSummary.summaryText}
+          </p>
+
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="rounded-xl bg-muted/40 border border-border/50 p-2.5 space-y-0.5 text-center">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase block">Completion</span>
+              <span className="text-sm font-extrabold text-emerald-600 block">
+                {data.periodSummary.completedCount} / {data.periodSummary.totalTasksDue} ({data.periodSummary.completionRate}%)
+              </span>
+            </div>
+            <div className="rounded-xl bg-muted/40 border border-border/50 p-2.5 space-y-0.5 text-center">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase block">Measurable Tasks</span>
+              <span className="text-sm font-extrabold text-foreground block">
+                {data.periodSummary.measurableTaskCount} tasks
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* FOCUS AREAS */}
+        <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3 shadow-2xs flex flex-col justify-between">
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
+                <Sparkles className="size-4 text-amber-500" />
+                <span>Focus Areas</span>
+              </h3>
+              <span className="text-[10px] font-bold text-muted-foreground">Deterministic Observations</span>
+            </div>
+
+            {data.focusAreas.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic py-4 text-center">
+                No active focus observations for this period.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {data.focusAreas.map((fa, i) => (
+                  <div
+                    key={i}
+                    className={`rounded-xl p-2.5 border text-xs space-y-1 ${
+                      fa.severity === "positive"
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-300"
+                        : fa.severity === "attention"
+                        ? "bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300"
+                        : "bg-muted/50 border-border text-foreground"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold">
+                      <span>{fa.title}</span>
+                      {fa.value && <span className="text-[10px] opacity-80">{fa.value}</span>}
+                    </div>
+                    <p className="text-[11px] leading-tight opacity-90">{fa.description}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* SECTION 4: COMPLETION TREND & TASK BREAKDOWN GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
         {/* COMPLETION TREND CHART */}

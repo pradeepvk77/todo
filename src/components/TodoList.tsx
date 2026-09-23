@@ -5,6 +5,7 @@ import { Todo, DaySection } from "@/lib/db";
 import { toggleTodo, updateTaskSectionAndOrder, updateTaskOrder } from "@/app/actions";
 import { TaskWidget } from "@/components/TaskWidget";
 import { TaskCircleCheckbox } from "@/components/TaskCircleCheckbox";
+import { CompleteTaskValueModal } from "@/components/CompleteTaskValueModal";
 import { formatAssignedDays } from "@/lib/time-utils";
 import { GripVertical, CheckSquare, Calendar, CheckCircle2, Sparkles, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -156,8 +157,9 @@ export function TodoList({ initialTodos }: TodoListProps) {
     setTodos(initialTodos);
   }
 
-  // ─── Core toggle — single source of truth for task completion ────────────
-  const handleToggle = (id: number, currentCompleted: boolean) => {
+  const [valueModalTask, setValueModalTask] = useState<Todo | null>(null);
+
+  const executeToggle = (id: number, currentCompleted: boolean, completedValue?: number | null) => {
     const targetTask = todos.find((t) => t.id === id);
     const nextCompleted = !currentCompleted;
 
@@ -181,11 +183,24 @@ export function TodoList({ initialTodos }: TodoListProps) {
 
     startTransition(async () => {
       try {
-        await toggleTodo(id, currentCompleted);
+        await toggleTodo(id, currentCompleted, completedValue);
       } finally {
         setTogglingId(null);
       }
     });
+  };
+
+  // ─── Core toggle — single source of truth for task completion ────────────
+  const handleToggle = (id: number, currentCompleted: boolean) => {
+    const targetTask = todos.find((t) => t.id === id);
+    const isMeasurable = targetTask && (targetTask.task_type === "input" || targetTask.task_type === "number");
+
+    if (!currentCompleted && isMeasurable) {
+      setValueModalTask(targetTask);
+      return;
+    }
+
+    executeToggle(id, currentCompleted);
   };
 
   // ─── Drag and drop ───────────────────────────────────────────────────────
@@ -531,6 +546,19 @@ export function TodoList({ initialTodos }: TodoListProps) {
           </div>
         </DragDropContext>
       )}
+
+      <CompleteTaskValueModal
+        isOpen={!!valueModalTask}
+        onClose={() => setValueModalTask(null)}
+        todo={valueModalTask}
+        onConfirm={(completedVal) => {
+          if (valueModalTask) {
+            const taskId = valueModalTask.id;
+            setValueModalTask(null);
+            executeToggle(taskId, false, completedVal);
+          }
+        }}
+      />
     </div>
   );
 }

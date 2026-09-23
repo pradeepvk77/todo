@@ -5,6 +5,7 @@ import { Todo } from "@/lib/db";
 import { toggleTodo, skipTodo, rescheduleTodo, getTaskPerformanceHistory, TaskPerformanceHistory } from "@/app/actions";
 import { SkipTaskModal } from "@/components/SkipTaskModal";
 import { RescheduleTaskModal } from "@/components/RescheduleTaskModal";
+import { CompleteTaskValueModal } from "@/components/CompleteTaskValueModal";
 import {
   Clock,
   ArrowRightLeft,
@@ -35,11 +36,11 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
   // Always default to the first uncompleted task
   const pendingTodos = todos.filter((t) => !t.completed);
   const initialTask = pendingTodos.length > 0 ? pendingTodos[0] : null;
-
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(initialTask?.id ?? null);
   const [isSwitchOpen, setIsSwitchOpen] = useState(false);
   const [isSkipOpen, setIsSkipOpen] = useState(false);
   const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
+  const [isValueModalOpen, setIsValueModalOpen] = useState(false);
   const [history, setHistory] = useState<TaskPerformanceHistory | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -79,15 +80,25 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
     };
   }, [currentTask?.id]);
 
-  const handleCompleteTask = () => {
+  const executeComplete = (completedVal?: number | null) => {
     if (!currentTask || isOtherUser) return;
     startTransition(async () => {
-      await toggleTodo(currentTask.id, false);
+      await toggleTodo(currentTask.id, false, completedVal);
       const remaining = todos.filter((t) => t.id !== currentTask.id && !t.completed);
       if (remaining.length > 0) {
         setSelectedTaskId(remaining[0].id);
       }
     });
+  };
+
+  const handleCompleteTask = () => {
+    if (!currentTask || isOtherUser) return;
+    const isMeasurable = currentTask.task_type === "input" || currentTask.task_type === "number";
+    if (isMeasurable) {
+      setIsValueModalOpen(true);
+      return;
+    }
+    executeComplete();
   };
 
   const handleSkipConfirm = (reason?: string, notes?: string) => {
@@ -352,6 +363,16 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
           </div>
         </div>
       </div>
+
+      <CompleteTaskValueModal
+        isOpen={isValueModalOpen}
+        onClose={() => setIsValueModalOpen(false)}
+        todo={currentTask}
+        onConfirm={(completedVal) => {
+          setIsValueModalOpen(false);
+          executeComplete(completedVal);
+        }}
+      />
     </div>
   );
 }

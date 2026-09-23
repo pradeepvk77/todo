@@ -269,14 +269,19 @@ export async function addTodo(data: {
     `;
     const nextOrder = ((maxRow?.maxOrder as number | null) ?? 0) + 1;
 
+    const { parseTargetValueAndUnit } = await import("@/lib/analytics-utils");
+    const { targetValue, unit } = parseTargetValueAndUnit(type_value);
+
     const [inserted] = (await sql`
       INSERT INTO todos (
         user_id, title, task_type, type_value, sort_order, assigned_day, category, day_section, last_reset_date,
-        priority, task_kind, estimated_duration, difficulty, expected_effort, goal_reason, note, scheduled_date, scheduled_time
+        priority, task_kind, estimated_duration, difficulty, expected_effort, goal_reason, note, scheduled_date, scheduled_time,
+        target_value, unit
       )
       VALUES (
         ${userId}, ${title}, ${task_type}, ${type_value}, ${nextOrder}, ${assigned_day}, ${category}, ${day_section}, ${currentISTDate},
-        ${priority}, ${task_kind}, ${estimated_duration}, ${difficulty}, ${expected_effort}, ${goal_reason}, ${note}, ${scheduled_date}, ${scheduled_time}
+        ${priority}, ${task_kind}, ${estimated_duration}, ${difficulty}, ${expected_effort}, ${goal_reason}, ${note}, ${scheduled_date}, ${scheduled_time},
+        ${targetValue}, ${unit || null}
       )
       RETURNING id
     `) as { id: number }[];
@@ -300,7 +305,7 @@ export async function addTodo(data: {
   }
 }
 
-export async function toggleTodo(id: number, currentCompleted: boolean) {
+export async function toggleTodo(id: number, currentCompleted: boolean, completedValue?: number | null) {
   try {
     await ensureDb();
     const userId = await requireUser();
@@ -312,9 +317,20 @@ export async function toggleTodo(id: number, currentCompleted: boolean) {
     const currentISTDate = getISTDateString();
     const nowIso = new Date().toISOString();
 
-    const [todo] = await sql`
-      SELECT id, title, task_type, category, scheduled_time FROM todos WHERE id = ${id} AND user_id = ${userId}
-    `;
+    const [todo] = (await sql`
+      SELECT id, title, task_type, type_value, target_value, unit, category, scheduled_time FROM todos WHERE id = ${id} AND user_id = ${userId}
+    `) as any[];
+
+    const { parseTargetValueAndUnit } = await import("@/lib/analytics-utils");
+    let targetVal = todo?.target_value ?? null;
+    let unitVal = todo?.unit ?? null;
+    if (targetVal === null && todo?.type_value) {
+      const parsed = parseTargetValueAndUnit(todo.type_value);
+      targetVal = parsed.targetValue;
+      unitVal = parsed.unit || null;
+    }
+
+    const valToSave = (completedValue !== undefined && completedValue !== null) ? completedValue : null;
 
     await withTransaction(async (txSql) => {
       await txSql`
@@ -325,22 +341,22 @@ export async function toggleTodo(id: number, currentCompleted: boolean) {
 
       if (!currentCompleted && todo) {
         await txSql`
-          INSERT INTO task_completions (user_id, todo_id, todo_title, task_type, category, completed_date, completed_at)
-          VALUES (${userId}, ${id}, ${todo.title}, ${todo.task_type}, ${todo.category || "Personal"}, ${currentISTDate}, NOW())
+          INSERT INTO task_completions (user_id, todo_id, todo_title, task_type, category, completed_date, completed_at, target_value, completed_value, unit)
+          VALUES (${userId}, ${id}, ${todo.title}, ${todo.task_type}, ${todo.category || "Personal"}, ${currentISTDate}, NOW(), ${targetVal}, ${valToSave}, ${unitVal})
           ON CONFLICT (user_id, todo_id, completed_date) DO UPDATE
-          SET completed_at = NOW()
+          SET completed_at = NOW(), target_value = ${targetVal}, completed_value = ${valToSave}, unit = ${unitVal}
         `;
 
         await txSql`
-          INSERT INTO task_occurrences (user_id, todo_id, occurrence_date, status, scheduled_time, completed_at)
-          VALUES (${userId}, ${id}, ${currentISTDate}, 'completed', ${todo.scheduled_time || ""}, NOW())
+          INSERT INTO task_occurrences (user_id, todo_id, occurrence_date, status, scheduled_time, completed_at, target_value, completed_value, unit)
+          VALUES (${userId}, ${id}, ${currentISTDate}, 'completed', ${todo.scheduled_time || ""}, NOW(), ${targetVal}, ${valToSave}, ${unitVal})
           ON CONFLICT (user_id, todo_id, occurrence_date) DO UPDATE
-          SET status = 'completed', completed_at = NOW(), updated_at = NOW()
+          SET status = 'completed', completed_at = NOW(), target_value = ${targetVal}, completed_value = ${valToSave}, unit = ${unitVal}, updated_at = NOW()
         `;
 
         await txSql`
           INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type, new_value)
-          VALUES (${userId}, ${id}, ${currentISTDate}, 'completed', ${JSON.stringify({ completed_at: nowIso })})
+          VALUES (${userId}, ${id}, ${currentISTDate}, 'completed', ${JSON.stringify({ completed_at: nowIso, target_value: targetVal, completed_value: valToSave, unit: unitVal })})
         `;
       } else {
         await txSql`
@@ -349,10 +365,10 @@ export async function toggleTodo(id: number, currentCompleted: boolean) {
         `;
 
         await txSql`
-          INSERT INTO task_occurrences (user_id, todo_id, occurrence_date, status, completed_at)
-          VALUES (${userId}, ${id}, ${currentISTDate}, 'pending', NULL)
+          INSERT INTO task_occurrences (user_id, todo_id, occurrence_date, status, completed_at, completed_value)
+          VALUES (${userId}, ${id}, ${currentISTDate}, 'pending', NULL, NULL)
           ON CONFLICT (user_id, todo_id, occurrence_date) DO UPDATE
-          SET status = 'pending', completed_at = NULL, updated_at = NOW()
+          SET status = 'pending', completed_at = NULL, completed_value = NULL, updated_at = NOW()
         `;
 
         await txSql`
@@ -942,9 +958,12 @@ export async function updateTaskValue(id: number, type_value: string) {
       return { error: "Unauthorized: You can only modify your own tasks" };
     }
 
+    const { parseTargetValueAndUnit } = await import("@/lib/analytics-utils");
+    const { targetValue, unit } = parseTargetValueAndUnit(type_value);
+
     await sql`
       UPDATE todos 
-      SET type_value = ${type_value} 
+      SET type_value = ${type_value}, target_value = ${targetValue}, unit = ${unit || null}
       WHERE id = ${id} AND user_id = ${userId}
     `;
     safeRevalidatePath("/");
@@ -1044,9 +1063,13 @@ export async function editTodo(
       return { error: "Unauthorized: You can only modify your own tasks" };
     }
 
+    const { parseTargetValueAndUnit } = await import("@/lib/analytics-utils");
+    const { targetValue, unit } = parseTargetValueAndUnit(type_value);
+
     await sql`
       UPDATE todos 
-      SET title = ${title}, task_type = ${task_type}, type_value = ${type_value}, assigned_day = ${assigned_day}, category = ${category}
+      SET title = ${title}, task_type = ${task_type}, type_value = ${type_value}, assigned_day = ${assigned_day}, category = ${category},
+          target_value = ${targetValue}, unit = ${unit || null}
       WHERE id = ${id} AND user_id = ${userId}
     `;
     safeRevalidatePath("/");
