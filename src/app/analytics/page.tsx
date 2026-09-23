@@ -25,7 +25,8 @@ export default async function AnalyticsPage({
   const otherUserName = friendNickname || defaultOtherUserName;
 
   const range: TimeRange = (resolvedParams.range as TimeRange) || "last_7_days";
-  const taskId = resolvedParams.taskId ? parseInt(resolvedParams.taskId, 10) : null;
+  const taskIdRaw = resolvedParams.taskId || (resolvedParams as any).task;
+  const taskId = taskIdRaw ? parseInt(taskIdRaw, 10) : null;
 
   let initialAllData = null;
   let initialTaskData = null;

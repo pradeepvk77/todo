@@ -64,6 +64,8 @@ export interface Todo {
   exclude_from_analytics?: boolean;
   target_value?: number | null;
   unit?: string | null;
+  skipped?: boolean;
+  status?: string;
 }
 
 export type DayOffType = "day_off" | "leave" | "sick" | "holiday" | "rest_day";

@@ -37,12 +37,20 @@ export function DashboardView({
 
   useEffect(() => {
     if (!viewingOtherUser) {
-      getUnreviewedMissedOccurrences().then((items) => {
-        if (items && items.length > 0) {
-          setUnreviewed(items);
-          setIsReviewOpen(true);
-        }
-      }).catch((err) => console.error(err));
+      // Check current IST hour — popup should only be visible AFTER 9:00 AM IST
+      const nowIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+      const currentHour = nowIST.getHours();
+
+      if (currentHour >= 9) {
+        getUnreviewedMissedOccurrences()
+          .then((items) => {
+            if (items && items.length > 0) {
+              setUnreviewed(items);
+              setIsReviewOpen(true);
+            }
+          })
+          .catch((err) => console.error(err));
+      }
     }
   }, [viewingOtherUser]);
 
@@ -72,7 +80,7 @@ export function DashboardView({
         onClose={() => setIsDayOffOpen(false)}
       />
 
-      {/* NEXT-DAY MISSED TASK REVIEW BANNER (IF UNREVIEWED MISSED TASKS EXIST) */}
+      {/* NEXT-DAY MISSED TASK REVIEW BANNER (ONLY AFTER 9 AM IST) */}
       {!viewingOtherUser && unreviewed.length > 0 && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 sm:p-4 flex items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -125,24 +133,7 @@ export function DashboardView({
       {/* 3. DAILY WORD */}
       {!viewingOtherUser && <DailyWordStrip />}
 
-      {/* 4. ALL TASKS COMPLETED MESSAGE OR RUNNING TASK SECTION */}
-      {allCompleted ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-card to-emerald-500/5 p-6 text-center space-y-3 shadow-2xs">
-          <div className="size-14 rounded-full bg-emerald-500/20 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-500/30">
-            <PartyPopper className="size-7" />
-          </div>
-          <div className="space-y-1.5 max-w-sm mx-auto">
-            <h3 className="text-xl font-bold text-foreground tracking-tight">Amazing work!</h3>
-            <p className="text-xs sm:text-sm text-muted-foreground font-medium leading-relaxed">
-              You’ve completed everything for today. Take a moment to be proud of your progress.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <RunningTaskCard todos={targetTodos} isOtherUser={viewingOtherUser} />
-      )}
-
-      {/* 5. TASK PROGRESS CARD */}
+      {/* IMAGE 4 ORDERING: 1. TASK PROGRESS CARD */}
       <div className="rounded-2xl border border-border/80 bg-card p-4 sm:p-4.5 space-y-3 shadow-2xs">
         <div className="flex items-center justify-between text-xs font-bold text-foreground">
           <span className="text-sm tracking-tight">Task Progress</span>
@@ -172,6 +163,23 @@ export function DashboardView({
             : "You're doing great! Keep it up."}
         </p>
       </div>
+
+      {/* 4. ALL TASKS COMPLETED MESSAGE OR RUNNING TASK SECTION */}
+      {allCompleted ? (
+        <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-card to-emerald-500/5 p-6 text-center space-y-3 shadow-2xs">
+          <div className="size-14 rounded-full bg-emerald-500/20 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-500/30">
+            <PartyPopper className="size-7" />
+          </div>
+          <div className="space-y-1.5 max-w-sm mx-auto">
+            <h3 className="text-xl font-bold text-foreground tracking-tight">Amazing work!</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium leading-relaxed">
+              You’ve completed everything for today. Take a moment to be proud of your progress.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <RunningTaskCard todos={targetTodos} isOtherUser={viewingOtherUser} />
+      )}
 
       {/* 6. VIEW ALL TASKS SMOOTH SCROLL BUTTON */}
       <div className="pt-1 space-y-3">

@@ -120,7 +120,7 @@ export function TaskCircleCheckbox({
             strokeLinecap="round"
             strokeLinejoin="round"
             className={[
-              "w-[54%] h-[54%] transition-all duration-200",
+              "w-3 transition-all duration-200",
               checked ? "opacity-100 animate-checkmark-draw" : "opacity-0 scale-50",
             ].join(" ")}
             aria-hidden="true"

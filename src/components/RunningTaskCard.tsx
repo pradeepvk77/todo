@@ -1,10 +1,17 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import Link from "next/link";
 import { Todo } from "@/lib/db";
-import { toggleTodo, skipTodo, rescheduleTodo, getTaskPerformanceHistory, TaskPerformanceHistory } from "@/app/actions";
+import {
+  toggleTodo,
+  skipTodo,
+  getTaskPerformanceHistory,
+  TaskPerformanceHistory,
+  getTodayTaskComparison,
+  TodayTaskComparisonData,
+} from "@/app/actions";
 import { SkipTaskModal } from "@/components/SkipTaskModal";
-import { RescheduleTaskModal } from "@/components/RescheduleTaskModal";
 import { CompleteTaskValueModal } from "@/components/CompleteTaskValueModal";
 import {
   Clock,
@@ -13,11 +20,12 @@ import {
   Calendar,
   TrendingUp,
   MessageSquare,
-  Lightbulb,
+  Users,
   Target,
-  RotateCcw,
   XCircle,
   Loader2,
+  BarChart2,
+  CheckCircle2,
 } from "lucide-react";
 import {
   Dialog,
@@ -33,41 +41,47 @@ interface RunningTaskCardProps {
 }
 
 export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardProps) {
-  // Always default to the first uncompleted task
-  const pendingTodos = todos.filter((t) => !t.completed);
+  // Only tasks that are not completed and not skipped
+  const pendingTodos = todos.filter((t) => !t.completed && !t.skipped);
   const initialTask = pendingTodos.length > 0 ? pendingTodos[0] : null;
+
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(initialTask?.id ?? null);
   const [isSwitchOpen, setIsSwitchOpen] = useState(false);
   const [isSkipOpen, setIsSkipOpen] = useState(false);
-  const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
   const [isValueModalOpen, setIsValueModalOpen] = useState(false);
   const [history, setHistory] = useState<TaskPerformanceHistory | null>(null);
+  const [comparison, setComparison] = useState<TodayTaskComparisonData | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Selected task object
-  const currentTask = todos.find((t) => t.id === selectedTaskId && !t.completed) || initialTask;
+  // Slide animation state: "idle" | "slide-out-left" | "slide-in-start" | "slide-in-end"
+  const [slideAnim, setSlideAnim] = useState<"idle" | "slide-out-left" | "slide-in-start" | "slide-in-end">("idle");
 
-  // Auto-switch to next pending task if currentTask is completed or missing
+  const currentTask = pendingTodos.find((t) => t.id === selectedTaskId) || initialTask;
+
   useEffect(() => {
-    if ((!currentTask || currentTask.completed) && pendingTodos.length > 0) {
+    if ((!currentTask || currentTask.completed || currentTask.skipped) && pendingTodos.length > 0) {
       setSelectedTaskId(pendingTodos[0].id);
     }
   }, [todos, currentTask, pendingTodos]);
 
-  // Fetch performance history whenever currentTask changes
   useEffect(() => {
     if (!currentTask) {
       setHistory(null);
+      setComparison(null);
       return;
     }
 
     let isMounted = true;
     setLoadingHistory(true);
-    getTaskPerformanceHistory(currentTask.id)
-      .then((data) => {
+    Promise.all([
+      getTaskPerformanceHistory(currentTask.id),
+      getTodayTaskComparison(currentTask.id),
+    ])
+      .then(([histData, compData]) => {
         if (isMounted) {
-          setHistory(data);
+          setHistory(histData);
+          setComparison(compData);
           setLoadingHistory(false);
         }
       })
@@ -80,14 +94,31 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
     };
   }, [currentTask?.id]);
 
+  const triggerSlideTransition = (nextTaskId: number | null) => {
+    setSlideAnim("slide-out-left");
+    setTimeout(() => {
+      if (nextTaskId !== null) {
+        setSelectedTaskId(nextTaskId);
+      }
+      setSlideAnim("slide-in-start");
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setSlideAnim("slide-in-end");
+          setTimeout(() => {
+            setSlideAnim("idle");
+          }, 250);
+        });
+      });
+    }, 200);
+  };
+
   const executeComplete = (completedVal?: number | null) => {
     if (!currentTask || isOtherUser) return;
     startTransition(async () => {
       await toggleTodo(currentTask.id, false, completedVal);
-      const remaining = todos.filter((t) => t.id !== currentTask.id && !t.completed);
-      if (remaining.length > 0) {
-        setSelectedTaskId(remaining[0].id);
-      }
+      const remaining = pendingTodos.filter((t) => t.id !== currentTask.id);
+      const nextId = remaining.length > 0 ? remaining[0].id : null;
+      triggerSlideTransition(nextId);
     });
   };
 
@@ -106,31 +137,12 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
     setIsSkipOpen(false);
     startTransition(async () => {
       await skipTodo(currentTask.id, undefined, reason, notes);
-      const remaining = todos.filter((t) => t.id !== currentTask.id && !t.completed);
-      if (remaining.length > 0) {
-        setSelectedTaskId(remaining[0].id);
-      }
+      const remaining = pendingTodos.filter((t) => t.id !== currentTask.id);
+      const nextId = remaining.length > 0 ? remaining[0].id : null;
+      triggerSlideTransition(nextId);
     });
   };
 
-  const handleRescheduleConfirm = (newDate: string, newTime: string, reason?: string, notes?: string) => {
-    if (!currentTask || isOtherUser) return;
-    setIsRescheduleOpen(false);
-    startTransition(async () => {
-      await rescheduleTodo(currentTask.id, {
-        newScheduledDate: newDate,
-        newScheduledTime: newTime,
-        reason,
-        notes,
-      });
-      const remaining = todos.filter((t) => t.id !== currentTask.id && !t.completed);
-      if (remaining.length > 0) {
-        setSelectedTaskId(remaining[0].id);
-      }
-    });
-  };
-
-  // If no pending tasks remain, return null (parent container will display completion message)
   if (!currentTask || pendingTodos.length === 0) {
     return null;
   }
@@ -138,9 +150,161 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
   const timeDisplay = currentTask.scheduled_time || "10:30 AM";
 
   return (
-    <div className="space-y-4">
-      {/* SECTION 1: CURRENT / RUNNING TASK CARD */}
-      <div className="rounded-2xl border border-emerald-500/20 bg-card p-4 sm:p-5 shadow-2xs relative space-y-3.5">
+    <div className="space-y-3.5 overflow-hidden">
+      {/* SECTION 2 (THIS TASK'S TREND & TODAY'S COMPARISON) GOES FIRST (TOP) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        {/* LEFT CARD: THIS TASK'S TREND + TODAY'S COMPARISON */}
+        <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3 shadow-2xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="font-bold text-foreground">This Task&apos;s Trend</span>
+              <span className="text-[11px] text-muted-foreground font-medium">Last 7 days</span>
+            </div>
+
+            {/* 7 VERTICAL DAY BARS */}
+            <div className="flex items-end justify-between gap-1.5 h-14 pt-1 mt-2 pb-1 px-1">
+              {history?.lastSevenBars && history.lastSevenBars.length === 7 ? (
+                history.lastSevenBars.map((bar, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1 flex-1">
+                    <div
+                      className={`w-full max-w-[12px] rounded-sm transition-all ${
+                        bar.completed
+                          ? "bg-emerald-500 h-9"
+                          : bar.status !== "none"
+                          ? "bg-emerald-500/30 h-5"
+                          : "bg-muted h-2.5"
+                      }`}
+                      title={`${bar.date}: ${bar.completed ? "Completed" : bar.status}`}
+                    />
+                    <span className="text-[10px] font-bold text-muted-foreground">{bar.dayLabel}</span>
+                  </div>
+                ))
+              ) : (
+                ["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1 flex-1">
+                    <div className="w-full max-w-[12px] rounded-sm bg-emerald-500/20 h-5" />
+                    <span className="text-[10px] font-bold text-muted-foreground">{d}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* TODAY'S COMPARISON (REPLACES SINGLE-TASK GREEN INSIGHT BOX) */}
+          <div className="pt-2 border-t border-border/60 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+              <Users className="size-3.5 text-amber-500 shrink-0" />
+              <span>Today&apos;s Comparison</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-2 rounded-xl bg-muted/40 border border-border/50 space-y-0.5">
+                <span className="text-[10px] font-bold text-muted-foreground block">You</span>
+                <span
+                  className={`font-bold flex items-center gap-1 ${
+                    comparison?.myStatus === "completed"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : comparison?.myStatus === "skipped"
+                      ? "text-rose-500"
+                      : "text-amber-600"
+                  }`}
+                >
+                  {comparison?.myStatus === "completed" ? (
+                    <>
+                      <CheckCircle2 className="size-3.5" />
+                      <span>{comparison.myValue || "Done"}</span>
+                    </>
+                  ) : comparison?.myStatus === "skipped" ? (
+                    "Skipped"
+                  ) : (
+                    "Pending"
+                  )}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-muted/40 border border-border/50 space-y-0.5">
+                <span className="text-[10px] font-bold text-muted-foreground block">
+                  {comparison?.friendName || "Friend"}
+                </span>
+                <span
+                  className={`font-bold flex items-center gap-1 ${
+                    comparison?.friendStatus === "completed"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : comparison?.friendStatus === "skipped"
+                      ? "text-rose-500"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {comparison?.friendStatus === "completed" ? (
+                    <>
+                      <CheckCircle2 className="size-3.5" />
+                      <span>{comparison.friendValue || "Done"}</span>
+                    </>
+                  ) : comparison?.friendStatus === "skipped" ? (
+                    "Skipped"
+                  ) : comparison?.friendStatus === "pending" ? (
+                    "Pending"
+                  ) : (
+                    "Not scheduled"
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT CARD: CURRENT STREAK COMPONENT & DIRECT TASK ANALYTICS BUTTON */}
+        <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs font-bold text-foreground">
+              <span className="flex items-center gap-1.5">
+                <Target className="size-4 text-emerald-500 shrink-0" />
+                <span>Current Streak</span>
+              </span>
+              <span className="text-[11px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                {history ? `${history.consistencyPercentage}% consistency` : "100% consistency"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/20">
+              <div className="size-10 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 border border-amber-500/30">
+                <TrendingUp className="size-5" />
+              </div>
+              <div>
+                <span className="text-lg font-black text-foreground block leading-none">
+                  {history ? `${history.currentStreak} days` : "0 days"}
+                </span>
+                <span className="text-xs font-semibold text-muted-foreground">Active habit streak</span>
+              </div>
+            </div>
+          </div>
+
+          {/* TASK ANALYTICS BUTTON MOVED DIRECTLY WITH CURRENT STREAK COMPONENT */}
+          <div className="pt-2 border-t border-border/60">
+            <Link
+              href={`/analytics?taskId=${currentTask.id}${isOtherUser ? "&user=other" : ""}`}
+              className="w-full py-2.5 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+              title={`View direct task insight for ${currentTask.title}`}
+            >
+              <BarChart2 className="size-4 text-emerald-600 shrink-0" />
+              <span>Current Task Insight</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 3 (RUNNING TASK FOCUSED CARD WITH SLIDE CAROUSEL ANIMATION) */}
+      <div
+        className={`rounded-2xl border border-emerald-500/20 bg-card p-4 sm:p-5 shadow-2xs relative space-y-3.5 ${
+          slideAnim === "slide-out-left"
+            ? "-translate-x-full opacity-0 duration-200 ease-in transition-all"
+            : slideAnim === "slide-in-start"
+            ? "translate-x-full opacity-0 transition-none"
+            : slideAnim === "slide-in-end"
+            ? "translate-x-0 opacity-100 duration-250 ease-out transition-all"
+            : "translate-x-0 opacity-100 transition-all"
+        }`}
+      >
         {/* TOP ROW: RUNNING TASK BADGE & SWITCH BUTTON */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -162,9 +326,9 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
           )}
         </div>
 
-        {/* SHADCN MODAL DIALOG POPUP FOR TASK SWITCHING */}
+        {/* MODAL DIALOG POPUP FOR TASK SWITCHING */}
         <Dialog open={isSwitchOpen} onOpenChange={setIsSwitchOpen}>
-          <DialogContent className="max-w-md rounded-2xl p-5">
+          <DialogContent showCloseButton={false} className="max-w-md rounded-2xl p-5">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold text-foreground">Switch Focus Task</DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
@@ -222,14 +386,27 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
           </div>
         </div>
 
-        {/* TASK ACTION BUTTONS: COMPLETE, SKIP, RESCHEDULE */}
+        {/* TASK ACTION BUTTONS: SKIP ON LEFT, COMPLETE TASK ON RIGHT */}
         {!isOtherUser && (
-          <div className="pt-1 flex flex-wrap items-center gap-2">
+          <div className="pt-1 flex items-center gap-2.5">
+            {/* SKIP BUTTON ON LEFT */}
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => setIsSkipOpen(true)}
+              className="py-3 px-4 rounded-xl border border-border/80 bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer min-w-[90px]"
+              title="Skip this task with a reason"
+            >
+              <XCircle className="size-4" />
+              <span>Skip</span>
+            </button>
+
+            {/* COMPLETE TASK PRIMARY BUTTON ON RIGHT */}
             <button
               type="button"
               disabled={isPending}
               onClick={handleCompleteTask}
-              className="flex-1 py-3 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer min-w-[140px] disabled:opacity-80"
+              className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-80"
             >
               {isPending ? (
                 <>
@@ -238,38 +415,16 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
                 </>
               ) : (
                 <>
-                  <Check className="size-4 stroke-[3] animate-spring-pop" />
+                  <Check className="size-4 stroke-[3]" />
                   <span>Complete Task</span>
                 </>
               )}
-            </button>
-
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={() => setIsSkipOpen(true)}
-              className="py-3 px-3.5 rounded-xl border border-border/80 bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-              title="Skip this task with a reason"
-            >
-              <XCircle className="size-4" />
-              <span>Skip</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={isPending}
-              onClick={() => setIsRescheduleOpen(true)}
-              className="py-3 px-3.5 rounded-xl border border-border/80 bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-              title="Reschedule to another date/time"
-            >
-              <RotateCcw className="size-4 text-blue-500" />
-              <span>Reschedule</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* SKIP & RESCHEDULE MODALS */}
+      {/* SKIP MODAL */}
       <SkipTaskModal
         isOpen={isSkipOpen}
         onClose={() => setIsSkipOpen(false)}
@@ -277,92 +432,6 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
         taskTitle={currentTask.title}
         isSubmitting={isPending}
       />
-
-      <RescheduleTaskModal
-        isOpen={isRescheduleOpen}
-        onClose={() => setIsRescheduleOpen(false)}
-        onConfirm={handleRescheduleConfirm}
-        taskTitle={currentTask.title}
-        currentDate={currentTask.scheduled_date}
-        currentTime={currentTask.scheduled_time}
-        isSubmitting={isPending}
-      />
-
-      {/* SECTION 2: 2-COLUMN TREND & QUICK INSIGHT ROW */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-        {/* LEFT CARD: THIS TASK'S TREND */}
-        <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3 shadow-2xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-xs mb-3">
-              <span className="font-bold text-foreground">This Task&apos;s Trend</span>
-              <span className="text-[11px] text-muted-foreground font-medium">Last 7 days</span>
-            </div>
-
-            {/* 7 VERTICAL DAY BARS */}
-            <div className="flex items-end justify-between gap-1.5 h-16 pt-2 pb-1 px-1">
-              {history?.lastSevenBars && history.lastSevenBars.length === 7 ? (
-                history.lastSevenBars.map((bar, i) => (
-                  <div key={i} className="flex flex-col items-center gap-1 flex-1">
-                    <div
-                      className={`w-full max-w-[12px] rounded-sm transition-all ${
-                        bar.completed
-                          ? "bg-emerald-500 h-10"
-                          : bar.status !== "none"
-                          ? "bg-emerald-500/30 h-6"
-                          : "bg-muted h-3"
-                      }`}
-                      title={`${bar.date}: ${bar.completed ? "Completed" : bar.status}`}
-                    />
-                    <span className="text-[10px] font-bold text-muted-foreground">{bar.dayLabel}</span>
-                  </div>
-                ))
-              ) : (
-                ["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-                  <div key={i} className="flex flex-col items-center gap-1 flex-1">
-                    <div className="w-full max-w-[12px] rounded-sm bg-emerald-500/20 h-6" />
-                    <span className="text-[10px] font-bold text-muted-foreground">{d}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* INNER GREEN INSIGHT BOX */}
-          <div className="mt-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-2.5 space-y-0.5 text-emerald-800 dark:text-emerald-300">
-            <div className="flex items-center gap-1.5 text-xs font-bold">
-              <TrendingUp className="size-4 text-emerald-600 shrink-0" />
-              <span>{history ? `${history.consistencyPercentage}% consistency` : "80% consistency"}</span>
-            </div>
-            <p className="text-[11px] font-medium text-emerald-700/90 dark:text-emerald-400/90 leading-tight">
-              {history?.insight || "You completed this task in 5 of the last 7 days."}
-            </p>
-          </div>
-        </div>
-
-        {/* RIGHT CARD: QUICK INSIGHT */}
-        <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3 shadow-2xs flex flex-col justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-              <Lightbulb className="size-4 text-amber-500 shrink-0" />
-              <span>Quick Insight</span>
-            </div>
-            <p className="text-xs text-muted-foreground font-medium leading-relaxed">
-              {history?.timeOfDayInsight || "You usually complete this task in the morning."}
-            </p>
-          </div>
-
-          <div className="space-y-2 pt-2 border-t border-border/60">
-
-            <div className="flex items-center gap-2 text-xs">
-              <Target className="size-3.5 text-muted-foreground/80 shrink-0" />
-              <div>
-                <span className="text-[10px] text-muted-foreground block leading-none">Current streak</span>
-                <span className="font-bold text-foreground text-xs">{history ? `${history.currentStreak} days` : "5 days"}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <CompleteTaskValueModal
         isOpen={isValueModalOpen}

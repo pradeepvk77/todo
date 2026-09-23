@@ -540,22 +540,119 @@ export const HINDI_DICTIONARY: Record<string, string> = {
   briefly: "संक्षेप में",
 };
 
+export const RICH_WORD_DICTIONARY: Record<string, FallbackWordData> = {
+  discuss: {
+    partOfSpeech: "verb",
+    englishMeaning: "To talk about something with another person or group to share ideas or reach a decision.",
+    hindiMeaning: "चर्चा करना / बातचीत करना",
+    exampleSentence: "We need to discuss the upcoming project plan during our team meeting.",
+    pronunciation: "/dɪˈskʌs/",
+    synonyms: ["talk about", "converse", "debate"],
+  },
+  streamline: {
+    partOfSpeech: "verb",
+    englishMeaning: "To make a process or system simpler, smoother, and more efficient.",
+    hindiMeaning: "सुव्यवस्थित करना / आसान बनाना",
+    exampleSentence: "The team streamlined the approval workflow to save hours of manual effort.",
+    pronunciation: "/ˈstriːmlaɪn/",
+    synonyms: ["simplify", "organize", "improve"],
+  },
+  clarify: {
+    partOfSpeech: "verb",
+    englishMeaning: "To make something clear or easier to understand by explaining it in detail.",
+    hindiMeaning: "स्पष्ट करना / साफ़ तौर पर समझाना",
+    exampleSentence: "Could you please clarify your requirements before we start drafting the proposal?",
+    pronunciation: "/ˈklærəfaɪ/",
+    synonyms: ["explain", "clear up", "simplify"],
+  },
+  prioritize: {
+    partOfSpeech: "verb",
+    englishMeaning: "To organize items or tasks so that the most important ones are handled first.",
+    hindiMeaning: "प्राथमिकता देना / सबसे ज़रूरी काम पहले करना",
+    exampleSentence: "You should prioritize urgent client emails every morning.",
+    pronunciation: "/praɪˈɔːrətaɪz/",
+    synonyms: ["rank", "focus on", "order"],
+  },
+  coordinate: {
+    partOfSpeech: "verb",
+    englishMeaning: "To organize different people or activities so that they work together effectively.",
+    hindiMeaning: "तालमेल बिठाना / समन्वय करना",
+    exampleSentence: "She will coordinate with the design team to complete the campaign on time.",
+    pronunciation: "/koʊˈɔːrdɪneɪt/",
+    synonyms: ["organize", "align", "manage"],
+  },
+  collaborate: {
+    partOfSpeech: "verb",
+    englishMeaning: "To work together with someone to produce or achieve something.",
+    hindiMeaning: "साथ मिलकर काम करना / सहयोग करना",
+    exampleSentence: "Developers and designers collaborate closely to build great user interfaces.",
+    pronunciation: "/kəˈlæbəreɪt/",
+    synonyms: ["work together", "team up", "cooperate"],
+  },
+  delegate: {
+    partOfSpeech: "verb",
+    englishMeaning: "To entrust a task or responsibility to another person.",
+    hindiMeaning: "ज़िम्मेदारी सौंपना",
+    exampleSentence: "A good manager knows when to delegate daily tasks to team members.",
+    pronunciation: "/ˈdelɪɡeɪt/",
+    synonyms: ["assign", "entrust", "hand over"],
+  },
+  implement: {
+    partOfSpeech: "verb",
+    englishMeaning: "To put a decision, plan, or agreement into effect.",
+    hindiMeaning: "लागू करना / अमल में लाना",
+    exampleSentence: "We plan to implement the new security features by next week.",
+    pronunciation: "/ˈɪmplɪment/",
+    synonyms: ["execute", "apply", "enforce"],
+  },
+  evaluate: {
+    partOfSpeech: "verb",
+    englishMeaning: "To judge or assess the quality, value, or importance of something.",
+    hindiMeaning: "मूल्यांकन करना / आंकना",
+    exampleSentence: "The manager will evaluate the quarterly performance results.",
+    pronunciation: "/ɪˈvæljueɪt/",
+    synonyms: ["assess", "judge", "review"],
+  },
+  schedule: {
+    partOfSpeech: "verb",
+    englishMeaning: "To arrange or plan an event to take place at a particular time.",
+    hindiMeaning: "समय तय करना / कार्यसूची बनाना",
+    exampleSentence: "Let's schedule a short sync call for tomorrow morning.",
+    pronunciation: "/ˈskedʒuːl/",
+    synonyms: ["arrange", "plan", "set up"],
+  },
+  feedback: {
+    partOfSpeech: "noun",
+    englishMeaning: "Information about reactions or performance used as a basis for improvement.",
+    hindiMeaning: "प्रतिक्रिया / राय",
+    exampleSentence: "Constructive feedback helps employees grow in their careers.",
+    pronunciation: "/ˈfiːdbæk/",
+    synonyms: ["comments", "advice", "response"],
+  },
+  efficient: {
+    partOfSpeech: "adjective",
+    englishMeaning: "Achieving maximum productivity with minimum wasted effort or expense.",
+    hindiMeaning: "कुशल / कार्यक्षम",
+    exampleSentence: "An efficient automated system saves both time and money.",
+    pronunciation: "/ɪˈfɪʃnt/",
+    synonyms: ["productive", "effective", "capable"],
+  },
+};
+
 export function getFallbackWordDetails(word: string): FallbackWordData {
   const key = word.toLowerCase().trim();
-  if (BUILTIN_WORD_DETAILS[key]) {
-    return BUILTIN_WORD_DETAILS[key];
+  if (RICH_WORD_DICTIONARY[key]) {
+    return RICH_WORD_DICTIONARY[key];
   }
 
-  const entry = VOCABULARY_WORD_POOL.find((w) => w.word.toLowerCase() === key);
-  const context = entry?.context || "General use";
   const hindiMeaning = HINDI_DICTIONARY[key] || word.charAt(0).toUpperCase() + word.slice(1);
 
   return {
     partOfSpeech: "verb",
-    englishMeaning: `To perform or apply in practical scenarios (${context}).`,
+    englishMeaning: `To use or apply "${word}" effectively in practical everyday communication.`,
     hindiMeaning,
-    exampleSentence: `Understanding how to use "${word}" effectively improves everyday communication.`,
+    exampleSentence: `She explained how to ${word} the project tasks clearly during the call.`,
     pronunciation: `/${word}/`,
-    synonyms: ["apply", "utilize"],
+    synonyms: ["apply", "use", "handle"],
   };
 }

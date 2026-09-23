@@ -510,15 +510,25 @@ export function TodoList({ initialTodos }: TodoListProps) {
 
                                       {/* Task text */}
                                       <div className="min-w-0 flex-1 flex flex-col justify-center">
-                                        <span
-                                          className={`text-xs sm:text-sm truncate transition-all duration-300 ${
-                                            isCompleted
-                                              ? "line-through text-muted-foreground/60 font-normal"
-                                              : "text-foreground font-semibold"
-                                          }`}
-                                        >
-                                          {todo.title}
-                                        </span>
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span
+                                            className={`text-xs sm:text-sm truncate transition-all duration-300 ${
+                                              todo.skipped
+                                                ? "line-through text-rose-500/80 font-normal"
+                                                : isCompleted
+                                                ? "line-through text-muted-foreground/60 font-normal"
+                                                : "text-foreground font-semibold"
+                                            }`}
+                                          >
+                                            {todo.title}
+                                          </span>
+                                          {todo.skipped && (
+                                            <span className="text-[9px] font-bold text-rose-600 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20 shrink-0 flex items-center gap-0.5">
+                                              <span>❌</span>
+                                              <span>Skipped</span>
+                                            </span>
+                                          )}
+                                        </div>
                                         <span className="text-[10px] font-medium text-muted-foreground/75 flex items-center gap-1 mt-0.5">
                                           <Calendar className="w-2.5 h-2.5 text-primary/60 inline shrink-0" />
                                           <span>{formatAssignedDays(todo.assigned_day)}</span>

@@ -85,12 +85,12 @@ function isValidSubscription(subscription: PushSubscriptionData) {
   return Boolean(
     subscription &&
       typeof subscription.endpoint === "string" &&
-      subscription.endpoint.startsWith("https://") &&
-      subscription.endpoint.length <= 4096 &&
+      subscription.endpoint.length >= 10 &&
+      subscription.endpoint.length <= 16384 &&
       typeof subscription.keys?.p256dh === "string" &&
-      subscription.keys.p256dh.length <= 1024 &&
+      subscription.keys.p256dh.length <= 4096 &&
       typeof subscription.keys?.auth === "string" &&
-      subscription.keys.auth.length <= 1024
+      subscription.keys.auth.length <= 4096
   );
 }
 
@@ -749,21 +749,106 @@ export async function subscribeToPushNotifications(subscription: PushSubscriptio
 }
 
 export async function unsubscribeFromPushNotifications(endpoint: string) {
-  if (!endpoint.startsWith("https://") || endpoint.length > 4096) {
-    return { error: "Invalid push subscription" };
-  }
-
   try {
     await ensureDb();
     const userId = await requireUser();
     await sql`
       DELETE FROM push_subscriptions
-      WHERE user_id = ${userId} AND endpoint = ${endpoint}
+      WHERE user_id = ${userId} AND (endpoint = ${endpoint} OR ${endpoint === ""})
     `;
     return { success: true };
   } catch (error) {
     console.error("Failed to remove push subscription:", error);
     return { error: "Failed to disable notifications" };
+  }
+}
+
+export async function clearUserPushSubscriptions() {
+  try {
+    await ensureDb();
+    const userId = await requireUser();
+    await sql`
+      DELETE FROM push_subscriptions
+      WHERE user_id = ${userId}
+    `;
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to clear push subscriptions:", error);
+    return { error: "Failed to clear notifications" };
+  }
+}
+
+export interface TodayTaskComparisonData {
+  myStatus: "completed" | "pending" | "skipped";
+  myValue?: string | null;
+  friendStatus: "completed" | "pending" | "skipped" | "not_scheduled";
+  friendValue?: string | null;
+  friendName: string;
+}
+
+export async function getTodayTaskComparison(todoId: number): Promise<TodayTaskComparisonData> {
+  try {
+    await ensureDb();
+    const currentUserId = await requireUser();
+    const friendUserId = getOtherUserId(currentUserId);
+    const friendName = await getFriendNickname(currentUserId, friendUserId);
+    const todayStr = getISTDateString();
+
+    const [todo] = (await sql`SELECT title FROM todos WHERE id = ${todoId}`) as { title: string }[];
+    if (!todo) {
+      return { myStatus: "pending", friendStatus: "not_scheduled", friendName };
+    }
+
+    const [myOcc] = (await sql`
+      SELECT status, completed_value, unit FROM task_occurrences
+      WHERE user_id = ${currentUserId} AND todo_id = ${todoId} AND occurrence_date = ${todayStr}
+    `) as { status: string; completed_value?: any; unit?: string }[];
+
+    let myStatus: TodayTaskComparisonData["myStatus"] = "pending";
+    if (myOcc?.status === "completed") myStatus = "completed";
+    else if (myOcc?.status === "skipped") myStatus = "skipped";
+
+    let myValueStr: string | null = null;
+    if (myOcc?.completed_value !== undefined && myOcc?.completed_value !== null) {
+      myValueStr = `${myOcc.completed_value} ${myOcc.unit || ""}`.trim();
+    }
+
+    const [friendTodo] = (await sql`
+      SELECT id FROM todos WHERE user_id = ${friendUserId} AND LOWER(title) = LOWER(${todo.title})
+    `) as { id: number }[];
+
+    let friendStatus: TodayTaskComparisonData["friendStatus"] = "not_scheduled";
+    let friendValueStr: string | null = null;
+
+    if (friendTodo) {
+      const [friendOcc] = (await sql`
+        SELECT status, completed_value, unit FROM task_occurrences
+        WHERE user_id = ${friendUserId} AND todo_id = ${friendTodo.id} AND occurrence_date = ${todayStr}
+      `) as { status: string; completed_value?: any; unit?: string }[];
+
+      if (friendOcc?.status === "completed") friendStatus = "completed";
+      else if (friendOcc?.status === "skipped") friendStatus = "skipped";
+      else friendStatus = "pending";
+
+      if (friendOcc?.completed_value !== undefined && friendOcc?.completed_value !== null) {
+        friendValueStr = `${friendOcc.completed_value} ${friendOcc.unit || ""}`.trim();
+      }
+    }
+
+    return {
+      myStatus,
+      myValue: myValueStr,
+      friendStatus,
+      friendValue: friendValueStr,
+      friendName,
+    };
+  } catch (error) {
+    console.error("Failed to get today task comparison:", error);
+    return {
+      myStatus: "pending",
+      friendStatus: "not_scheduled",
+      friendName: "Friend",
+    };
   }
 }
 
@@ -1174,31 +1259,33 @@ export async function getTaskPerformanceHistory(
       SELECT id, estimated_duration, day_section FROM todos WHERE id = ${todoId}
     `) as { id: number; estimated_duration?: number; day_section?: string }[];
 
+    // Fetch all occurrences for this todo
     const occurrences = (await sql`
       SELECT occurrence_date as date, status
       FROM task_occurrences
       WHERE user_id = ${userId} AND todo_id = ${todoId}
       ORDER BY occurrence_date DESC
-      LIMIT 14
+      LIMIT 30
     `) as { date: string; status: string }[];
 
-    if (occurrences.length === 0) {
-      const completions = (await sql`
-        SELECT completed_date as date
-        FROM task_completions
-        WHERE user_id = ${userId} AND todo_id = ${todoId}
-        ORDER BY completed_date DESC
-        LIMIT 14
-      `) as { date: string }[];
+    // Also fetch completions to ensure no completed date is missed
+    const completions = (await sql`
+      SELECT completed_date as date
+      FROM task_completions
+      WHERE user_id = ${userId} AND todo_id = ${todoId}
+      ORDER BY completed_date DESC
+      LIMIT 30
+    `) as { date: string }[];
 
-      if (completions.length > 0) {
-        completions.forEach((c) => {
-          occurrences.push({ date: c.date, status: "completed" });
-        });
+    const statusMap = new Map<string, string>();
+    occurrences.forEach((o) => statusMap.set(o.date, o.status));
+    completions.forEach((c) => {
+      if (!statusMap.has(c.date)) {
+        statusMap.set(c.date, "completed");
       }
-    }
+    });
 
-    // Build 7-day M-T-W-T-F-S-S bar chart
+    const todayStr = getISTDateString();
     const today = new Date();
     const lastSevenBars: { dayLabel: string; date: string; completed: boolean; status: string }[] = [];
     const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -1215,63 +1302,67 @@ export async function getTaskPerformanceHistory(
       }).formatToParts(d);
       const getPart = (t: string) => parts.find((p) => p.type === t)?.value || "";
       const dateStr = `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
-      const dayIndex = d.getDay(); // 0 is Sunday
+      const dayIndex = d.getDay();
       const dayLabel = DAY_LABELS[dayIndex];
 
-      const match = occurrences.find((o) => o.date === dateStr);
-      const isComp = match?.status === "completed";
+      const st = statusMap.get(dateStr) || "none";
+      const isComp = st === "completed";
       lastSevenBars.push({
         dayLabel,
         date: dateStr,
         completed: isComp,
-        status: match?.status || "none",
+        status: st,
       });
     }
 
-    // Compute streak
+    // Compute active streak (consecutive completed days)
     let currentStreak = 0;
-    for (const bar of [...lastSevenBars].reverse()) {
-      if (bar.completed) {
-        currentStreak++;
-      } else {
-        break;
+    const sortedCompletedDates = Array.from(statusMap.entries())
+      .filter(([_, st]) => st === "completed")
+      .map(([d, _]) => d)
+      .sort((a, b) => b.localeCompare(a));
+
+    if (sortedCompletedDates.length > 0) {
+      let checkDate = new Date();
+      // If today is not completed, start checking from yesterday
+      if (!statusMap.has(todayStr) || statusMap.get(todayStr) !== "completed") {
+        checkDate.setDate(checkDate.getDate() - 1);
+      }
+
+      while (true) {
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).formatToParts(checkDate);
+        const getPart = (t: string) => parts.find((p) => p.type === t)?.value || "";
+        const cStr = `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+
+        if (statusMap.get(cStr) === "completed") {
+          currentStreak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
       }
     }
 
-    const totalOccurrences = occurrences.slice(0, 7).length;
-    const completedCount = occurrences.slice(0, 7).filter((o) => o.status === "completed").length;
-    const rescheduledCount = occurrences.slice(0, 7).filter((o) => o.status === "rescheduled").length;
-    const skippedCount = occurrences.slice(0, 7).filter((o) => o.status === "skipped").length;
-    const consistencyPercentage = totalOccurrences > 0 ? Math.round((completedCount / totalOccurrences) * 100) : 0;
-
-    let insight: string | null = null;
-    if (totalOccurrences >= 2) {
-      if (completedCount === totalOccurrences) {
-        insight = `You completed this task in ${completedCount} of the last ${totalOccurrences} days.`;
-      } else if (rescheduledCount > 1) {
-        insight = `You've been rescheduling this task frequently.`;
-      } else if (completedCount / totalOccurrences >= 0.7) {
-        insight = `You usually complete this task on time.`;
-      } else if (skippedCount > 1) {
-        insight = `You skipped this task ${skippedCount} times recently.`;
-      } else {
-        insight = `You completed this task in ${completedCount} of the last ${totalOccurrences} days.`;
-      }
-    } else {
-      insight = `You completed this task in ${completedCount} of the last 7 days.`;
-    }
+    const lastSevenCompleted = lastSevenBars.filter((b) => b.completed).length;
+    const consistencyPercentage = Math.round((lastSevenCompleted / 7) * 100);
 
     const sec = todo?.day_section?.toLowerCase() || "morning";
     const timeOfDayInsight = `You usually complete this task in the ${sec}.`;
     const duration = todo?.estimated_duration || 20;
     const avgTime = `${duration} minutes`;
+    const insight = `You completed this task in ${lastSevenCompleted} of the last 7 days.`;
 
     return {
       occurrences: occurrences.slice(0, 7).reverse(),
       lastSevenBars,
       consistencyPercentage,
-      totalOccurrences,
-      completedCount,
+      totalOccurrences: 7,
+      completedCount: lastSevenCompleted,
       currentStreak,
       avgTime,
       insight,
@@ -1287,7 +1378,7 @@ export async function getTaskPerformanceHistory(
       completedCount: 0,
       currentStreak: 0,
       avgTime: "20 minutes",
-      insight: null,
+      insight: "Keep going to build your habit streak!",
       timeOfDayInsight: "You usually complete this task on time.",
     };
   }

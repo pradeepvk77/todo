@@ -146,11 +146,11 @@ export function MissedTaskReviewModal({
 
         {/* Form Questions Container */}
         <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
-          {/* Question A: Why task was not completed */}
+          {/* Question 1: Why task was not completed */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
               <HelpCircle className="size-3.5 text-amber-500 shrink-0" />
-              <span>1. Why didn&apos;t you complete it?</span>
+              <span>Why didn&apos;t you complete it?</span>
             </label>
             <div className="grid grid-cols-2 gap-1.5 text-xs">
               {TASK_REASONS.map((r) => {
@@ -182,46 +182,6 @@ export function MissedTaskReviewModal({
                 onChange={(e) => setTaskNotes(e.target.value)}
                 placeholder="Optional task reason notes..."
                 className="w-full px-3 py-1.5 rounded-xl border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-              />
-            )}
-          </div>
-
-          {/* Question B: Why user did not update the app */}
-          <div className="space-y-2 pt-2 border-t border-border/60">
-            <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-              <HelpCircle className="size-3.5 text-blue-500 shrink-0" />
-              <span>2. Why didn&apos;t you update the app?</span>
-            </label>
-            <div className="grid grid-cols-2 gap-1.5 text-xs">
-              {APP_UPDATE_REASONS.map((r) => {
-                const isSelected = selectedAppReason === r.id;
-                return (
-                  <button
-                    type="button"
-                    key={r.id}
-                    onClick={() => setSelectedAppReason(r.id)}
-                    className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer text-left ${
-                      isSelected
-                        ? "border-blue-500 bg-blue-500/10 font-bold text-foreground"
-                        : "border-border/60 hover:bg-muted/50 text-muted-foreground font-medium"
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 truncate">
-                      <span>{r.icon}</span>
-                      <span className="truncate">{r.label}</span>
-                    </span>
-                    {isSelected && <Check className="size-3.5 text-blue-600 stroke-[3] shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-            {selectedAppReason === "other" && (
-              <input
-                type="text"
-                value={appNotes}
-                onChange={(e) => setAppNotes(e.target.value)}
-                placeholder="Optional app update notes..."
-                className="w-full px-3 py-1.5 rounded-xl border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               />
             )}
           </div>
