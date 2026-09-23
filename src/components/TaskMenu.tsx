@@ -133,7 +133,7 @@ export function TaskMenu({
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
           >
             <ClipboardList className="size-4" />
-            Task history
+            Complete History
           </Link>
 
           <div className="my-1 border-t border-border" />
