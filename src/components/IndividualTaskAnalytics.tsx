@@ -133,7 +133,7 @@ export function IndividualTaskAnalytics({
                 <span>·</span>
                 <span className="flex items-center gap-1 font-semibold">
                   <Clock className="size-3.5 text-muted-foreground/80" />
-                  Default: {data.scheduledTime}
+                  {data.scheduledTime ? data.scheduledTime : "Unscheduled"}
                 </span>
               </div>
             </div>

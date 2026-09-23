@@ -23,7 +23,15 @@ const REASON_LABELS: Record<string, { label: string; icon: string }> = {
   other: { label: "Other", icon: "💬" },
 };
 
-function getDateRange(range: TimeRange, includeToday: boolean = false): DateRange {
+import {
+  ON_TIME_TOLERANCE_MINUTES,
+  getISTHourFromTimestamp,
+  getTimeOfDaySection,
+  parseScheduledTimeToMinutes,
+  parseTimestampToISTMinutes,
+} from "@/lib/analytics-utils";
+
+function getDateRange(range: TimeRange, includeToday: boolean = false, minDate?: string): DateRange {
   const today = new Date();
   const formatIST = (d: Date) => getISTDateString(d);
 
@@ -39,16 +47,22 @@ function getDateRange(range: TimeRange, includeToday: boolean = false): DateRang
   if (range === "last_30_days") days = 30;
   if (range === "all_time") days = 365;
 
-  const start = new Date(endDateObj);
-  start.setDate(endDateObj.getDate() - days + 1);
+  let startDateStr: string;
+  if (range === "all_time" && minDate && minDate.trim()) {
+    startDateStr = minDate.trim();
+  } else {
+    const start = new Date(endDateObj);
+    start.setDate(endDateObj.getDate() - days + 1);
+    startDateStr = formatIST(start);
+  }
 
-  const prevEnd = new Date(start);
-  prevEnd.setDate(start.getDate() - 1);
+  const prevEnd = new Date(endDateObj);
+  prevEnd.setDate(endDateObj.getDate() - days);
   const prevStart = new Date(prevEnd);
   prevStart.setDate(prevEnd.getDate() - days + 1);
 
   return {
-    startDate: formatIST(start),
+    startDate: startDateStr,
     endDate: formatIST(endDateObj),
     prevStartDate: formatIST(prevStart),
     prevEndDate: formatIST(prevEnd),
@@ -127,16 +141,26 @@ export async function getAllTasksAnalytics(
   await initDb();
   const currentUserId = await requireUser();
   const userId = resolveUserId(currentUserId, targetUserId);
-  const dates = getDateRange(timeRange, includeToday);
+
+  let minDate: string | undefined = undefined;
+  if (timeRange === "all_time") {
+    const minRows = (await sql`
+      SELECT MIN(occurrence_date) as min_date FROM task_occurrences WHERE user_id = ${userId}
+    `) as { min_date: string }[];
+    if (minRows[0]?.min_date) {
+      minDate = minRows[0].min_date;
+    }
+  }
+  const dates = getDateRange(timeRange, includeToday, minDate);
 
   // 1. Query occurrences for current period
   const currentOccurrences = (await sql`
-    SELECT id, todo_id, occurrence_date, status, missed_reason, created_at
+    SELECT id, todo_id, occurrence_date, status, missed_reason, created_at, completed_at
     FROM task_occurrences
     WHERE user_id = ${userId}
       AND occurrence_date >= ${dates.startDate}
       AND occurrence_date <= ${dates.endDate}
-  `) as { id: number; todo_id: number; occurrence_date: string; status: string; missed_reason?: string; created_at: string }[];
+  `) as { id: number; todo_id: number; occurrence_date: string; status: string; missed_reason?: string; created_at: string; completed_at?: string }[];
 
   // Fallback to task_completions if task_occurrences has no entries
   if (currentOccurrences.length === 0) {
@@ -306,12 +330,19 @@ export async function getAllTasksAnalytics(
     NIGHT: { total: 0, completed: 0 },
   };
 
-  currentOccurrences.forEach((o) => {
+  validCurrentOccurrences.forEach((o) => {
     const todo = userTodos.find((t) => t.id === o.todo_id);
-    const sec = (todo?.day_section || "MORNING").toUpperCase();
-    if (sectionStats[sec]) {
-      sectionStats[sec].total++;
-      if (o.status === "completed") sectionStats[sec].completed++;
+    const assignedSec = (todo?.day_section || "MORNING").toUpperCase();
+    if (sectionStats[assignedSec]) {
+      sectionStats[assignedSec].total++;
+    }
+
+    if (o.status === "completed") {
+      const completedHour = getISTHourFromTimestamp(o.completed_at);
+      const actualSec = getTimeOfDaySection(completedHour) || assignedSec;
+      if (sectionStats[actualSec]) {
+        sectionStats[actualSec].completed++;
+      }
     }
   });
 
@@ -454,7 +485,17 @@ export async function getIndividualTaskAnalytics(
   await initDb();
   const currentUserId = await requireUser();
   const userId = resolveUserId(currentUserId, targetUserId);
-  const dates = getDateRange(timeRange, includeToday);
+
+  let minDate: string | undefined = undefined;
+  if (timeRange === "all_time") {
+    const minRows = (await sql`
+      SELECT MIN(occurrence_date) as min_date FROM task_occurrences WHERE user_id = ${userId} AND todo_id = ${taskId}
+    `) as { min_date: string }[];
+    if (minRows[0]?.min_date) {
+      minDate = minRows[0].min_date;
+    }
+  }
+  const dates = getDateRange(timeRange, includeToday, minDate);
 
   // Fetch task info
   const [todo] = (await sql`
@@ -561,11 +602,55 @@ export async function getIndividualTaskAnalytics(
     else break;
   }
 
-  // Timing performance calculations
+  // Timing performance calculations (Punctuality & Delay)
   const duration = todo.estimated_duration || 20;
   const avgCompletionTime = `${duration} minutes`;
-  const avgDelay = "8 min earlier than scheduled";
-  const onTimePercentage = 85;
+
+  const resolvedTimeStr = todo.scheduled_time?.trim()
+    ? todo.scheduled_time.trim()
+    : todo.task_type === "time" && todo.type_value?.trim()
+    ? todo.type_value.trim()
+    : "";
+
+  const scheduledMinutes = parseScheduledTimeToMinutes(resolvedTimeStr);
+
+  let avgDelay = "N/A";
+  let onTimePercentage = 0;
+
+  if (scheduledMinutes !== null) {
+    let totalDelayMinutes = 0;
+    let onTimeCount = 0;
+    let timedCompletedCount = 0;
+
+    validOccurrences.forEach((o) => {
+      if (o.status === "completed" && o.completed_at) {
+        const completedMinutes = parseTimestampToISTMinutes(o.completed_at);
+        if (completedMinutes !== null) {
+          let diff = completedMinutes - scheduledMinutes;
+          if (diff < -720) diff += 1440;
+          if (diff > 720) diff -= 1440;
+
+          totalDelayMinutes += diff;
+          if (diff <= ON_TIME_TOLERANCE_MINUTES) {
+            onTimeCount++;
+          }
+          timedCompletedCount++;
+        }
+      }
+    });
+
+    if (timedCompletedCount > 0) {
+      onTimePercentage = Math.round((onTimeCount / timedCompletedCount) * 100);
+      const meanDelay = Math.round(totalDelayMinutes / timedCompletedCount);
+      if (meanDelay < 0) {
+        avgDelay = `${Math.abs(meanDelay)} min earlier than scheduled`;
+      } else if (meanDelay > 0) {
+        avgDelay = `${meanDelay} min later than scheduled`;
+      } else {
+        avgDelay = "On time";
+      }
+    }
+  }
 
   // Missed reasons breakdown
   const reasonCounts: Record<string, number> = {};
@@ -591,20 +676,65 @@ export async function getIndividualTaskAnalytics(
     })
     .sort((a, b) => b.count - a.count);
 
-  // Time of Day distribution for this task
-  const sec = (todo.day_section || "MORNING").toUpperCase();
+  // Time of Day distribution for this task using actual completed_at timestamps
+  const sectionCounts: Record<string, { total: number; completed: number }> = {
+    MORNING: { total: 0, completed: 0 },
+    AFTERNOON: { total: 0, completed: 0 },
+    EVENING: { total: 0, completed: 0 },
+    NIGHT: { total: 0, completed: 0 },
+  };
+
+  const taskAssignedSec = (todo.day_section || "MORNING").toUpperCase();
+
+  validOccurrences.forEach((o) => {
+    if (sectionCounts[taskAssignedSec]) {
+      sectionCounts[taskAssignedSec].total++;
+    }
+    if (o.status === "completed") {
+      const completedHour = getISTHourFromTimestamp(o.completed_at);
+      const actualSec = getTimeOfDaySection(completedHour) || taskAssignedSec;
+      if (sectionCounts[actualSec]) {
+        sectionCounts[actualSec].completed++;
+      }
+    }
+  });
+
+  const calcSection = (secKey: string) => {
+    const s = sectionCounts[secKey] || { total: 0, completed: 0 };
+    return {
+      count: s.completed,
+      total: s.total,
+      percentage: s.total > 0 ? Math.round((s.completed / s.total) * 100) : 0,
+    };
+  };
+
+  const morning = calcSection("MORNING");
+  const afternoon = calcSection("AFTERNOON");
+  const evening = calcSection("EVENING");
+  const night = calcSection("NIGHT");
+
+  const bestSec = [
+    { name: "Morning", pct: morning.percentage },
+    { name: "Afternoon", pct: afternoon.percentage },
+    { name: "Evening", pct: evening.percentage },
+    { name: "Night", pct: night.percentage },
+  ].sort((a, b) => b.pct - a.pct)[0];
+
+  const bestTime = bestSec.pct > 0 ? bestSec.name : (taskAssignedSec.charAt(0) + taskAssignedSec.slice(1).toLowerCase());
+  const insight = `You're most likely to complete this task in the ${bestTime.toLowerCase()}. Consider scheduling it earlier on low-performance days.`;
+
   const timeOfDayPerformance = {
-    morning: { count: sec === "MORNING" ? completedCount : 0, total: totalOccurrences, percentage: sec === "MORNING" ? completionRate : 42 },
-    afternoon: { count: sec === "AFTERNOON" ? completedCount : 0, total: totalOccurrences, percentage: sec === "AFTERNOON" ? completionRate : 68 },
-    evening: { count: sec === "EVENING" ? completedCount : 0, total: totalOccurrences, percentage: sec === "EVENING" ? completionRate : 54 },
-    night: { count: sec === "NIGHT" ? completedCount : 0, total: totalOccurrences, percentage: sec === "NIGHT" ? completionRate : 31 },
-    bestTime: sec.charAt(0) + sec.slice(1).toLowerCase(),
-    insight: `You're most likely to complete this task in the ${sec.toLowerCase()}. Consider scheduling it earlier on low-performance days.`,
+    morning,
+    afternoon,
+    evening,
+    night,
+    bestTime,
+    insight,
   };
 
   // Recent activity log formatting
   const recentActivity = occurrences.slice(0, 10).map((o) => {
-    let time = o.scheduled_time || todo.scheduled_time || "10:30 AM";
+    let time = o.scheduled_time || (resolvedTimeStr ? resolvedTimeStr : "Unscheduled");
     if (o.completed_at) {
       try {
         time = new Date(o.completed_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -635,7 +765,7 @@ export async function getIndividualTaskAnalytics(
     taskTitle: todo.title,
     note: todo.note || "",
     category: todo.category || "Personal Growth",
-    scheduledTime: todo.scheduled_time || "10:30 AM",
+    scheduledTime: resolvedTimeStr || "",
     estimatedDuration: todo.estimated_duration || 20,
     priority: todo.priority || "should_do",
     difficulty: todo.difficulty || "medium",

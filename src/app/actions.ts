@@ -2,6 +2,7 @@
 
 import {
   sql,
+  withTransaction,
   initDb,
   Todo,
   DaySection,
@@ -315,50 +316,54 @@ export async function toggleTodo(id: number, currentCompleted: boolean) {
       SELECT id, title, task_type, category, scheduled_time FROM todos WHERE id = ${id} AND user_id = ${userId}
     `;
 
-    await sql`
-      UPDATE todos 
-      SET completed = ${!currentCompleted}, last_reset_date = ${currentISTDate}
-      WHERE id = ${id} AND user_id = ${userId}
-    `;
+    await withTransaction(async (txSql) => {
+      await txSql`
+        UPDATE todos 
+        SET completed = ${!currentCompleted}, last_reset_date = ${currentISTDate}
+        WHERE id = ${id} AND user_id = ${userId}
+      `;
+
+      if (!currentCompleted && todo) {
+        await txSql`
+          INSERT INTO task_completions (user_id, todo_id, todo_title, task_type, category, completed_date, completed_at)
+          VALUES (${userId}, ${id}, ${todo.title}, ${todo.task_type}, ${todo.category || "Personal"}, ${currentISTDate}, NOW())
+          ON CONFLICT (user_id, todo_id, completed_date) DO UPDATE
+          SET completed_at = NOW()
+        `;
+
+        await txSql`
+          INSERT INTO task_occurrences (user_id, todo_id, occurrence_date, status, scheduled_time, completed_at)
+          VALUES (${userId}, ${id}, ${currentISTDate}, 'completed', ${todo.scheduled_time || ""}, NOW())
+          ON CONFLICT (user_id, todo_id, occurrence_date) DO UPDATE
+          SET status = 'completed', completed_at = NOW(), updated_at = NOW()
+        `;
+
+        await txSql`
+          INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type, new_value)
+          VALUES (${userId}, ${id}, ${currentISTDate}, 'completed', ${JSON.stringify({ completed_at: nowIso })})
+        `;
+      } else {
+        await txSql`
+          DELETE FROM task_completions
+          WHERE user_id = ${userId} AND todo_id = ${id} AND completed_date = ${currentISTDate}
+        `;
+
+        await txSql`
+          INSERT INTO task_occurrences (user_id, todo_id, occurrence_date, status, completed_at)
+          VALUES (${userId}, ${id}, ${currentISTDate}, 'pending', NULL)
+          ON CONFLICT (user_id, todo_id, occurrence_date) DO UPDATE
+          SET status = 'pending', completed_at = NULL, updated_at = NOW()
+        `;
+
+        await txSql`
+          INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type)
+          VALUES (${userId}, ${id}, ${currentISTDate}, 'uncompleted')
+        `;
+      }
+    });
 
     if (!currentCompleted && todo) {
-      await sql`
-        INSERT INTO task_completions (user_id, todo_id, todo_title, task_type, category, completed_date, completed_at)
-        VALUES (${userId}, ${id}, ${todo.title}, ${todo.task_type}, ${todo.category || "Personal"}, ${currentISTDate}, NOW())
-        ON CONFLICT (user_id, todo_id, completed_date) DO UPDATE
-        SET completed_at = NOW()
-      `;
-
-      await sql`
-        INSERT INTO task_occurrences (user_id, todo_id, occurrence_date, status, scheduled_time, completed_at)
-        VALUES (${userId}, ${id}, ${currentISTDate}, 'completed', ${todo.scheduled_time || ""}, NOW())
-        ON CONFLICT (user_id, todo_id, occurrence_date) DO UPDATE
-        SET status = 'completed', completed_at = NOW(), updated_at = NOW()
-      `;
-
-      await sql`
-        INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type, new_value)
-        VALUES (${userId}, ${id}, ${currentISTDate}, 'completed', ${JSON.stringify({ completed_at: nowIso })})
-      `;
-
       await notifyOtherUser(userId, "completed", todo.title);
-    } else {
-      await sql`
-        DELETE FROM task_completions
-        WHERE user_id = ${userId} AND todo_id = ${id} AND completed_date = ${currentISTDate}
-      `;
-
-      await sql`
-        INSERT INTO task_occurrences (user_id, todo_id, occurrence_date, status, completed_at)
-        VALUES (${userId}, ${id}, ${currentISTDate}, 'pending', NULL)
-        ON CONFLICT (user_id, todo_id, occurrence_date) DO UPDATE
-        SET status = 'pending', completed_at = NULL, updated_at = NOW()
-      `;
-
-      await sql`
-        INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type)
-        VALUES (${userId}, ${id}, ${currentISTDate}, 'uncompleted')
-      `;
     }
     safeRevalidatePath("/");
     safeRevalidatePath("/edit-tasks");
@@ -392,25 +397,27 @@ export async function skipTodo(
       SELECT scheduled_time FROM todos WHERE id = ${id} AND user_id = ${userId}
     `;
 
-    await sql`
-      INSERT INTO task_occurrences (
-        user_id, todo_id, occurrence_date, status, scheduled_time, skipped_at, missed_reason, missed_reason_notes
-      )
-      VALUES (
-        ${userId}, ${id}, ${occurrenceDate}, 'skipped', ${todo?.scheduled_time || ""}, NOW(), ${missedReason}, ${missedNotes}
-      )
-      ON CONFLICT (user_id, todo_id, occurrence_date) DO UPDATE
-      SET status = 'skipped',
-          skipped_at = NOW(),
-          missed_reason = ${missedReason},
-          missed_reason_notes = ${missedNotes},
-          updated_at = NOW()
-    `;
+    await withTransaction(async (txSql) => {
+      await txSql`
+        INSERT INTO task_occurrences (
+          user_id, todo_id, occurrence_date, status, scheduled_time, skipped_at, missed_reason, missed_reason_notes
+        )
+        VALUES (
+          ${userId}, ${id}, ${occurrenceDate}, 'skipped', ${todo?.scheduled_time || ""}, NOW(), ${missedReason}, ${missedNotes}
+        )
+        ON CONFLICT (user_id, todo_id, occurrence_date) DO UPDATE
+        SET status = 'skipped',
+            skipped_at = NOW(),
+            missed_reason = ${missedReason},
+            missed_reason_notes = ${missedNotes},
+            updated_at = NOW()
+      `;
 
-    await sql`
-      INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type, metadata)
-      VALUES (${userId}, ${id}, ${occurrenceDate}, 'skipped', ${JSON.stringify({ missed_reason: missedReason, notes: missedNotes })})
-    `;
+      await txSql`
+        INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type, metadata)
+        VALUES (${userId}, ${id}, ${occurrenceDate}, 'skipped', ${JSON.stringify({ missed_reason: missedReason, notes: missedNotes })})
+      `;
+    });
 
     safeRevalidatePath("/");
     safeRevalidatePath("/edit-tasks");
@@ -451,43 +458,45 @@ export async function rescheduleTodo(
     const missedReason = data.reason || "";
     const missedNotes = data.notes?.trim() || "";
 
-    await sql`
-      UPDATE todos
-      SET scheduled_date = ${data.newScheduledDate}, scheduled_time = ${newScheduledTime}
-      WHERE id = ${id} AND user_id = ${userId}
-    `;
+    await withTransaction(async (txSql) => {
+      await txSql`
+        UPDATE todos
+        SET scheduled_date = ${data.newScheduledDate}, scheduled_time = ${newScheduledTime}
+        WHERE id = ${id} AND user_id = ${userId}
+      `;
 
-    await sql`
-      INSERT INTO task_occurrences (
-        user_id, todo_id, occurrence_date, status, scheduled_time, rescheduled_at,
-        rescheduled_to_date, rescheduled_to_time, missed_reason, missed_reason_notes
-      )
-      VALUES (
-        ${userId}, ${id}, ${occurrenceDate}, 'rescheduled', ${prevTime}, NOW(),
-        ${data.newScheduledDate}, ${newScheduledTime}, ${missedReason}, ${missedNotes}
-      )
-      ON CONFLICT (user_id, todo_id, occurrence_date) DO UPDATE
-      SET status = 'rescheduled',
-          rescheduled_at = NOW(),
-          rescheduled_to_date = ${data.newScheduledDate},
-          rescheduled_to_time = ${newScheduledTime},
-          missed_reason = ${missedReason},
-          missed_reason_notes = ${missedNotes},
-          updated_at = NOW()
-    `;
+      await txSql`
+        INSERT INTO task_occurrences (
+          user_id, todo_id, occurrence_date, status, scheduled_time, rescheduled_at,
+          rescheduled_to_date, rescheduled_to_time, missed_reason, missed_reason_notes
+        )
+        VALUES (
+          ${userId}, ${id}, ${occurrenceDate}, 'rescheduled', ${prevTime}, NOW(),
+          ${data.newScheduledDate}, ${newScheduledTime}, ${missedReason}, ${missedNotes}
+        )
+        ON CONFLICT (user_id, todo_id, occurrence_date) DO UPDATE
+        SET status = 'rescheduled',
+            rescheduled_at = NOW(),
+            rescheduled_to_date = ${data.newScheduledDate},
+            rescheduled_to_time = ${newScheduledTime},
+            missed_reason = ${missedReason},
+            missed_reason_notes = ${missedNotes},
+            updated_at = NOW()
+      `;
 
-    await sql`
-      INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type, previous_value, new_value, metadata)
-      VALUES (
-        ${userId},
-        ${id},
-        ${occurrenceDate},
-        'rescheduled',
-        ${JSON.stringify({ scheduled_date: prevDate, scheduled_time: prevTime })},
-        ${JSON.stringify({ scheduled_date: data.newScheduledDate, scheduled_time: newScheduledTime })},
-        ${JSON.stringify({ reason: missedReason, notes: missedNotes })}
-      )
-    `;
+      await txSql`
+        INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type, previous_value, new_value, metadata)
+        VALUES (
+          ${userId},
+          ${id},
+          ${occurrenceDate},
+          'rescheduled',
+          ${JSON.stringify({ scheduled_date: prevDate, scheduled_time: prevTime })},
+          ${JSON.stringify({ scheduled_date: data.newScheduledDate, scheduled_time: newScheduledTime })},
+          ${JSON.stringify({ reason: missedReason, notes: missedNotes })}
+        )
+      `;
+    });
 
     safeRevalidatePath("/");
     safeRevalidatePath("/edit-tasks");
@@ -600,33 +609,35 @@ export async function submitMissedTaskReview(
     const appReason = data.appUpdateReason || "";
     const appNotes = data.appUpdateReasonNotes?.trim() || "";
 
-    await sql`
-      UPDATE task_occurrences
-      SET review_status = 'reviewed',
-          reviewed_at = NOW(),
-          missed_reason = ${data.missedReason},
-          missed_reason_notes = ${missedNotes},
-          app_update_reason = ${appReason},
-          app_update_reason_notes = ${appNotes},
-          updated_at = NOW()
-      WHERE id = ${occurrenceId} AND user_id = ${userId}
-    `;
+    await withTransaction(async (txSql) => {
+      await txSql`
+        UPDATE task_occurrences
+        SET review_status = 'reviewed',
+            reviewed_at = NOW(),
+            missed_reason = ${data.missedReason},
+            missed_reason_notes = ${missedNotes},
+            app_update_reason = ${appReason},
+            app_update_reason_notes = ${appNotes},
+            updated_at = NOW()
+        WHERE id = ${occurrenceId} AND user_id = ${userId}
+      `;
 
-    await sql`
-      INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type, metadata)
-      VALUES (
-        ${userId},
-        ${occ.todo_id},
-        ${occ.occurrence_date},
-        'reviewed',
-        ${JSON.stringify({
-          missed_reason: data.missedReason,
-          missed_reason_notes: missedNotes,
-          app_update_reason: appReason,
-          app_update_reason_notes: appNotes,
-        })}
-      )
-    `;
+      await txSql`
+        INSERT INTO task_activities (user_id, todo_id, occurrence_date, action_type, metadata)
+        VALUES (
+          ${userId},
+          ${occ.todo_id},
+          ${occ.occurrence_date},
+          'reviewed',
+          ${JSON.stringify({
+            missed_reason: data.missedReason,
+            missed_reason_notes: missedNotes,
+            app_update_reason: appReason,
+            app_update_reason_notes: appNotes,
+          })}
+        )
+      `;
+    });
 
     safeRevalidatePath("/");
     safeRevalidatePath("/analytics");
@@ -790,7 +801,7 @@ function getCompletionStreak(dates: Set<string>, endDate: string) {
   return streak;
 }
 
-export async function getAnalytics(forOtherUser = false): Promise<AnalyticsData> {
+export async function getAnalytics(forOtherUser = false, includeToday = false): Promise<AnalyticsData> {
   await ensureDb();
   const currentUserId = await requireUser();
   const userId = forOtherUser ? (currentUserId === "user1" ? "user2" : "user1") : currentUserId;
@@ -814,10 +825,10 @@ export async function getAnalytics(forOtherUser = false): Promise<AnalyticsData>
 
   const completionDates = new Set(completions.map((item) => item.completed_date));
 
-  // buildDailyAnalytics: for days=7, end at yesterday (today - 1). For others, end at today.
+  // buildDailyAnalytics: for days=7, end at yesterday (today - 1) if includeToday is false.
   const buildDailyAnalytics = (days: number) => Array.from({ length: days }, (_, index) => {
       const date = dateFromISTString(today);
-      const endDateOffset = days === 7 ? 1 : 0;
+      const endDateOffset = includeToday ? 0 : (days === 7 ? 1 : 0);
       date.setDate(date.getDate() - endDateOffset - (days - 1 - index));
       const key = formatISTDate(date);
       const isDayOff = dayOffSet.has(key);
@@ -1125,7 +1136,11 @@ export interface TaskPerformanceHistory {
   timeOfDayInsight: string;
 }
 
-export async function getTaskPerformanceHistory(todoId: number, targetUserId?: string): Promise<TaskPerformanceHistory> {
+export async function getTaskPerformanceHistory(
+  todoId: number,
+  targetUserId?: string,
+  includeToday: boolean = false
+): Promise<TaskPerformanceHistory> {
   try {
     await ensureDb();
     const currentUserId = await requireUser();
@@ -1167,7 +1182,8 @@ export async function getTaskPerformanceHistory(todoId: number, targetUserId?: s
 
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
-      d.setDate(d.getDate() - i);
+      const startOffset = includeToday ? 0 : 1;
+      d.setDate(d.getDate() - startOffset - i);
       const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Asia/Kolkata",
         year: "numeric",

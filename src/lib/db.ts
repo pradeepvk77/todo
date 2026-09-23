@@ -157,6 +157,34 @@ function createPgSql(url: string) {
 
 export const sql = isNeon ? neon(dbUrl) : createPgSql(dbUrl);
 
+export async function withTransaction<T>(
+  callback: (txSql: (strings: TemplateStringsArray, ...values: any[]) => Promise<any>) => Promise<T>
+): Promise<T> {
+  if (!globalThis._pgPool) {
+    globalThis._pgPool = new Pool({ connectionString: dbUrl });
+  }
+  const client = await globalThis._pgPool.connect();
+  try {
+    await client.query("BEGIN");
+    const txSql = async (strings: TemplateStringsArray, ...values: any[]) => {
+      let text = strings[0];
+      for (let i = 1; i < strings.length; i++) {
+        text += `$${i}` + strings[i];
+      }
+      const res = await client.query(text, values);
+      return res.rows;
+    };
+    const result = await callback(txSql as any);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // Initialize the todos table if it doesn't exist
 export async function initDb() {
   await sql`
