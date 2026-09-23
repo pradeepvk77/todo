@@ -398,7 +398,13 @@ export function IndividualTaskAnalytics({
         </div>
       </div>
 
-      {/* SECTION 7: WHY THIS TASK IS MISSED & TIME OF DAY GRID */}
+
+
+      {/* SECTION 9: PROGRESS ANALYTICS — only for measurable tasks with real data */}
+      {data.progressData && (
+        <ProgressSection progress={data.progressData} />
+      )}
+            {/* SECTION 7: WHY THIS TASK IS MISSED & TIME OF DAY GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         {/* WHY THIS TASK IS MISSED */}
         <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3 shadow-2xs">
@@ -471,7 +477,6 @@ export function IndividualTaskAnalytics({
           </div>
         </div>
       </div>
-
       {/* SECTION 8: RECENT ACTIVITY & NOTES GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         {/* RECENT ACTIVITY */}
@@ -534,11 +539,6 @@ export function IndividualTaskAnalytics({
           )}
         </div>
       </div>
-
-      {/* SECTION 9: PROGRESS ANALYTICS — only for measurable tasks with real data */}
-      {data.progressData && (
-        <ProgressSection progress={data.progressData} />
-      )}
     </div>
   );
 }
