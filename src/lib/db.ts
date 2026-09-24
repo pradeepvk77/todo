@@ -237,6 +237,12 @@ export async function initDb() {
   try {
     await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS exclude_from_analytics BOOLEAN DEFAULT FALSE`;
   } catch {}
+  try {
+    await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS target_value NUMERIC`;
+  } catch {}
+  try {
+    await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS unit TEXT DEFAULT ''`;
+  } catch {}
 
   try {
     await sql`
@@ -301,6 +307,26 @@ export async function initDb() {
   await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS app_update_reason_notes TEXT DEFAULT ''`;
   await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS rescheduled_to_date TEXT DEFAULT ''`;
   await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS rescheduled_to_time TEXT DEFAULT ''`;
+  try {
+    await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS target_value NUMERIC`;
+  } catch {}
+  try {
+    await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS completed_value NUMERIC`;
+  } catch {}
+  try {
+    await sql`ALTER TABLE task_occurrences ADD COLUMN IF NOT EXISTS unit TEXT DEFAULT ''`;
+  } catch {}
+
+  // task_completions — add numeric tracking columns if missing
+  try {
+    await sql`ALTER TABLE task_completions ADD COLUMN IF NOT EXISTS target_value NUMERIC`;
+  } catch {}
+  try {
+    await sql`ALTER TABLE task_completions ADD COLUMN IF NOT EXISTS completed_value NUMERIC`;
+  } catch {}
+  try {
+    await sql`ALTER TABLE task_completions ADD COLUMN IF NOT EXISTS unit TEXT DEFAULT ''`;
+  } catch {}
 
   await sql`
     CREATE TABLE IF NOT EXISTS task_activities (
