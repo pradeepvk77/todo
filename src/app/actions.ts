@@ -804,45 +804,78 @@ export async function getTodayTaskComparison(todoId: number): Promise<TodayTaskC
     const friendUserId = getOtherUserId(currentUserId);
     const friendName = await getFriendNickname(currentUserId, friendUserId);
     const todayStr = getISTDateString();
+    const todayDayOfWeek = getISTDayOfWeek();
 
     const [todo] = (await sql`SELECT title FROM todos WHERE id = ${todoId}`) as { title: string }[];
     if (!todo) {
       return { myStatus: "pending", friendStatus: "not_scheduled", friendName };
     }
 
+    const cleanTitle = todo.title.trim().toLowerCase();
+
+    // Fetch my status for today
     const [myOcc] = (await sql`
       SELECT status, completed_value, unit FROM task_occurrences
       WHERE user_id = ${currentUserId} AND todo_id = ${todoId} AND occurrence_date = ${todayStr}
     `) as { status: string; completed_value?: any; unit?: string }[];
 
-    let myStatus: TodayTaskComparisonData["myStatus"] = "pending";
-    if (myOcc?.status === "completed") myStatus = "completed";
-    else if (myOcc?.status === "skipped") myStatus = "skipped";
+    const [myComp] = (await sql`
+      SELECT completed_value, unit FROM task_completions
+      WHERE user_id = ${currentUserId} AND todo_id = ${todoId} AND completed_date = ${todayStr}
+    `) as { completed_value?: any; unit?: string }[];
 
+    let myStatus: TodayTaskComparisonData["myStatus"] = "pending";
     let myValueStr: string | null = null;
-    if (myOcc?.completed_value !== undefined && myOcc?.completed_value !== null) {
-      myValueStr = `${myOcc.completed_value} ${myOcc.unit || ""}`.trim();
+
+    if (myComp || myOcc?.status === "completed") {
+      myStatus = "completed";
+      const val = myComp?.completed_value ?? myOcc?.completed_value;
+      const unit = myComp?.unit ?? myOcc?.unit;
+      if (val !== undefined && val !== null) {
+        myValueStr = `${val} ${unit || ""}`.trim();
+      }
+    } else if (myOcc?.status === "skipped") {
+      myStatus = "skipped";
     }
 
-    const [friendTodo] = (await sql`
-      SELECT id FROM todos WHERE user_id = ${friendUserId} AND LOWER(title) = LOWER(${todo.title})
-    `) as { id: number }[];
+    // Match friend's task cleanly by trimmed lowercase title
+    const friendTodos = (await sql`
+      SELECT id, title, assigned_day FROM todos WHERE user_id = ${friendUserId}
+    `) as { id: number; title: string; assigned_day?: string }[];
+
+    const friendTodo = friendTodos.find(
+      (t) => t.title.trim().toLowerCase() === cleanTitle
+    );
 
     let friendStatus: TodayTaskComparisonData["friendStatus"] = "not_scheduled";
     let friendValueStr: string | null = null;
 
     if (friendTodo) {
+      const isActiveToday = isTaskActiveOnDay(friendTodo.assigned_day, todayDayOfWeek);
+
       const [friendOcc] = (await sql`
         SELECT status, completed_value, unit FROM task_occurrences
         WHERE user_id = ${friendUserId} AND todo_id = ${friendTodo.id} AND occurrence_date = ${todayStr}
       `) as { status: string; completed_value?: any; unit?: string }[];
 
-      if (friendOcc?.status === "completed") friendStatus = "completed";
-      else if (friendOcc?.status === "skipped") friendStatus = "skipped";
-      else friendStatus = "pending";
+      const [friendComp] = (await sql`
+        SELECT completed_value, unit FROM task_completions
+        WHERE user_id = ${friendUserId} AND todo_id = ${friendTodo.id} AND completed_date = ${todayStr}
+      `) as { completed_value?: any; unit?: string }[];
 
-      if (friendOcc?.completed_value !== undefined && friendOcc?.completed_value !== null) {
-        friendValueStr = `${friendOcc.completed_value} ${friendOcc.unit || ""}`.trim();
+      if (friendComp || friendOcc?.status === "completed") {
+        friendStatus = "completed";
+        const val = friendComp?.completed_value ?? friendOcc?.completed_value;
+        const unit = friendComp?.unit ?? friendOcc?.unit;
+        if (val !== undefined && val !== null) {
+          friendValueStr = `${val} ${unit || ""}`.trim();
+        }
+      } else if (friendOcc?.status === "skipped") {
+        friendStatus = "skipped";
+      } else if (isActiveToday) {
+        friendStatus = "pending";
+      } else {
+        friendStatus = "not_scheduled";
       }
     }
 
