@@ -795,6 +795,12 @@ export interface TodayTaskComparisonData {
   friendStatus: "completed" | "pending" | "skipped" | "not_scheduled";
   friendValue?: string | null;
   friendName: string;
+  myTodayPercentage: number;
+  myTodayCompleted: number;
+  myTodayTotal: number;
+  friendTodayPercentage: number;
+  friendTodayCompleted: number;
+  friendTodayTotal: number;
 }
 
 export async function getTodayTaskComparison(todoId: number): Promise<TodayTaskComparisonData> {
@@ -806,9 +812,57 @@ export async function getTodayTaskComparison(todoId: number): Promise<TodayTaskC
     const todayStr = getISTDateString();
     const todayDayOfWeek = getISTDayOfWeek();
 
+    // Overall Today Progress for Me
+    const myAllTodos = (await sql`
+      SELECT id, assigned_day FROM todos WHERE user_id = ${currentUserId} AND (exclude_from_analytics IS NOT TRUE)
+    `) as { id: number; assigned_day?: string }[];
+    const myTodayScheduledTodos = myAllTodos.filter((t) => isTaskActiveOnDay(t.assigned_day, todayDayOfWeek));
+    const myTodayTotal = myTodayScheduledTodos.length;
+
+    const myTodayCompletions = (await sql`
+      SELECT DISTINCT c.todo_id 
+      FROM task_completions c
+      JOIN todos t ON c.todo_id = t.id
+      WHERE c.user_id = ${currentUserId} 
+        AND c.completed_date = ${todayStr}
+        AND (t.exclude_from_analytics IS NOT TRUE)
+    `) as { todo_id: number }[];
+    const myTodayCompleted = myTodayCompletions.length;
+    const myTodayPercentage = myTodayTotal > 0 ? Math.min(100, Math.round((myTodayCompleted / myTodayTotal) * 100)) : 0;
+
+    // Overall Today Progress for Friend (Anu)
+    const friendAllTodos = (await sql`
+      SELECT id, assigned_day FROM todos WHERE user_id = ${friendUserId} AND (exclude_from_analytics IS NOT TRUE)
+    `) as { id: number; assigned_day?: string }[];
+    const friendTodayScheduledTodos = friendAllTodos.filter((t) => isTaskActiveOnDay(t.assigned_day, todayDayOfWeek));
+    const friendTodayTotal = friendTodayScheduledTodos.length;
+
+    const friendTodayCompletions = (await sql`
+      SELECT DISTINCT c.todo_id 
+      FROM task_completions c
+      JOIN todos t ON c.todo_id = t.id
+      WHERE c.user_id = ${friendUserId} 
+        AND c.completed_date = ${todayStr}
+        AND (t.exclude_from_analytics IS NOT TRUE)
+    `) as { todo_id: number }[];
+    const friendTodayCompleted = friendTodayCompletions.length;
+    const friendTodayPercentage = friendTodayTotal > 0 ? Math.min(100, Math.round((friendTodayCompleted / friendTodayTotal) * 100)) : 0;
+
+    const fallbackReturn = {
+      myStatus: "pending" as const,
+      friendStatus: "not_scheduled" as const,
+      friendName,
+      myTodayPercentage,
+      myTodayCompleted,
+      myTodayTotal,
+      friendTodayPercentage,
+      friendTodayCompleted,
+      friendTodayTotal,
+    };
+
     const [todo] = (await sql`SELECT title FROM todos WHERE id = ${todoId}`) as { title: string }[];
     if (!todo) {
-      return { myStatus: "pending", friendStatus: "not_scheduled", friendName };
+      return fallbackReturn;
     }
 
     const cleanTitle = todo.title.trim().toLowerCase();
@@ -885,6 +939,12 @@ export async function getTodayTaskComparison(todoId: number): Promise<TodayTaskC
       friendStatus,
       friendValue: friendValueStr,
       friendName,
+      myTodayPercentage,
+      myTodayCompleted,
+      myTodayTotal,
+      friendTodayPercentage,
+      friendTodayCompleted,
+      friendTodayTotal,
     };
   } catch (error) {
     console.error("Failed to get today task comparison:", error);
@@ -892,6 +952,12 @@ export async function getTodayTaskComparison(todoId: number): Promise<TodayTaskC
       myStatus: "pending",
       friendStatus: "not_scheduled",
       friendName: "Friend",
+      myTodayPercentage: 0,
+      myTodayCompleted: 0,
+      myTodayTotal: 0,
+      friendTodayPercentage: 0,
+      friendTodayCompleted: 0,
+      friendTodayTotal: 0,
     };
   }
 }

@@ -190,64 +190,55 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
             </div>
           </div>
 
-          {/* TODAY'S COMPARISON (REPLACES SINGLE-TASK GREEN INSIGHT BOX) */}
+          {/* TODAY'S COMPARISON (OVERALL TODAY TASK COMPLETION PERCENTAGE) */}
           <div className="pt-2 border-t border-border/60 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-              <Users className="size-3.5 text-amber-500 shrink-0" />
-              <span>Today&apos;s Comparison</span>
+            <div className="flex items-center justify-between text-xs font-bold text-foreground">
+              <span className="flex items-center gap-1.5">
+                <Users className="size-3.5 text-amber-500 shrink-0" />
+                <span>Today&apos;s Comparison</span>
+              </span>
+              <span className="text-[10px] text-muted-foreground font-medium">Overall Today</span>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="p-2 rounded-xl bg-muted/40 border border-border/50 space-y-0.5">
-                <span className="text-[10px] font-bold text-muted-foreground block">You</span>
-                <span
-                  className={`font-bold flex items-center gap-1 ${
-                    comparison?.myStatus === "completed"
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : comparison?.myStatus === "skipped"
-                      ? "text-rose-500"
-                      : "text-amber-600"
-                  }`}
-                >
-                  {comparison?.myStatus === "completed" ? (
-                    <>
-                      <CheckCircle2 className="size-3.5" />
-                      <span>{comparison.myValue || "Done"}</span>
-                    </>
-                  ) : comparison?.myStatus === "skipped" ? (
-                    "Skipped"
-                  ) : (
-                    "Pending"
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-muted-foreground">You</span>
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    {comparison ? `${comparison.myTodayCompleted}/${comparison.myTodayTotal}` : "0/0"}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                    {comparison ? `${comparison.myTodayPercentage}%` : "0%"}
+                  </span>
+                  {comparison?.myStatus === "completed" && (
+                    <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded shrink-0">
+                      ✓ Done
+                    </span>
                   )}
-                </span>
+                </div>
               </div>
 
               <div className="p-2 rounded-xl bg-muted/40 border border-border/50 space-y-0.5">
-                <span className="text-[10px] font-bold text-muted-foreground block">
-                  {comparison?.friendName || "Friend"}
-                </span>
-                <span
-                  className={`font-bold flex items-center gap-1 ${
-                    comparison?.friendStatus === "completed"
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : comparison?.friendStatus === "skipped"
-                      ? "text-rose-500"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  {comparison?.friendStatus === "completed" ? (
-                    <>
-                      <CheckCircle2 className="size-3.5" />
-                      <span>{comparison.friendValue || "Done"}</span>
-                    </>
-                  ) : comparison?.friendStatus === "skipped" ? (
-                    "Skipped"
-                  ) : comparison?.friendStatus === "pending" ? (
-                    "Pending"
-                  ) : (
-                    "Not scheduled"
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-muted-foreground">
+                    {comparison?.friendName || "Friend"}
+                  </span>
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    {comparison ? `${comparison.friendTodayCompleted}/${comparison.friendTodayTotal}` : "0/0"}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-base font-black text-blue-600 dark:text-blue-400">
+                    {comparison ? `${comparison.friendTodayPercentage}%` : "0%"}
+                  </span>
+                  {comparison?.friendStatus === "completed" && (
+                    <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1 py-0.2 rounded shrink-0">
+                      ✓ Done
+                    </span>
                   )}
-                </span>
+                </div>
               </div>
             </div>
           </div>
