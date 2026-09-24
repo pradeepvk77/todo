@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { Todo } from "@/lib/db";
 import { editTodo } from "@/app/actions";
 import { generate15MinTimeOptions, DAYS_OF_WEEK, formatAssignedDays } from "@/lib/time-utils";
-import { Pencil, Loader2, Clock, FileText, Calendar } from "lucide-react";
+import { Pencil, Loader2, Clock, FileText, Calendar, TrendingUp } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -44,7 +44,26 @@ export function EditTaskDialog({ todo, open, onOpenChange }: EditTaskDialogProps
   const [initialValue, setInitialValue] = useState(todo.type_value);
   const [category, setCategory] = useState(todo.category || "Personal");
   const [excludeFromAnalytics, setExcludeFromAnalytics] = useState(Boolean(todo.exclude_from_analytics));
+  const [trackProgress, setTrackProgress] = useState(Boolean(todo.track_progress));
+  const [targetValue, setTargetValue] = useState<string>(
+    todo.target_value !== null && todo.target_value !== undefined ? String(todo.target_value) : ""
+  );
+  const [unit, setUnit] = useState<string>(todo.unit || "");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (open) {
+      setTitle(todo.title);
+      setTaskType(todo.task_type === "time" ? "time" : "input");
+      setSelectedDays(parseInitialDays(todo.assigned_day));
+      setInitialValue(todo.type_value);
+      setCategory(todo.category || "Personal");
+      setExcludeFromAnalytics(Boolean(todo.exclude_from_analytics));
+      setTrackProgress(Boolean(todo.track_progress));
+      setTargetValue(todo.target_value !== null && todo.target_value !== undefined ? String(todo.target_value) : "");
+      setUnit(todo.unit || "");
+    }
+  }, [open, todo]);
 
   const timeOptions = generate15MinTimeOptions();
 
@@ -103,6 +122,9 @@ export function EditTaskDialog({ todo, open, onOpenChange }: EditTaskDialogProps
         type_value: initialValue || (taskType === "time" ? timeOptions[0] : ""),
         assigned_day: assignedDayValue,
         category,
+        track_progress: trackProgress,
+        target_value: trackProgress && targetValue !== "" ? Number(targetValue) : null,
+        unit: trackProgress ? unit : null,
       });
 
       if (excludeFromAnalytics !== Boolean(todo.exclude_from_analytics)) {
@@ -233,6 +255,60 @@ export function EditTaskDialog({ todo, open, onOpenChange }: EditTaskDialogProps
               </Select>
             </div>
           )}
+
+          {/* Track Progress Toggle */}
+          <div className="space-y-3 p-3 rounded-lg border border-border bg-muted/40">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <Label htmlFor="track-progress" className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-primary" />
+                  Track Progress & Completion Value
+                </Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Ask for completed value (e.g. 50 pages, 30 mins) when marking task completed.
+                </p>
+              </div>
+              <input
+                id="track-progress"
+                type="checkbox"
+                checked={trackProgress}
+                onChange={(e) => setTrackProgress(e.target.checked)}
+                className="size-4 rounded-xs border-input text-primary focus:ring-primary cursor-pointer shrink-0"
+              />
+            </div>
+
+            {trackProgress && (
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                <div className="space-y-1">
+                  <Label htmlFor="target-value" className="text-[11px] font-medium text-foreground">
+                    Target Goal (Optional)
+                  </Label>
+                  <Input
+                    id="target-value"
+                    type="number"
+                    step="any"
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(e.target.value)}
+                    placeholder="e.g. 50"
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="progress-unit" className="text-[11px] font-medium text-foreground">
+                    Unit / Label (Optional)
+                  </Label>
+                  <Input
+                    id="progress-unit"
+                    type="text"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    placeholder="e.g. pages, mins"
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Exclude from Analytics Toggle */}
           <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40">

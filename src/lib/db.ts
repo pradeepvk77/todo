@@ -66,6 +66,7 @@ export interface Todo {
   unit?: string | null;
   skipped?: boolean;
   status?: string;
+  track_progress?: boolean;
 }
 
 export type DayOffType = "day_off" | "leave" | "sick" | "holiday" | "rest_day";
@@ -242,6 +243,9 @@ export async function initDb() {
   } catch {}
   try {
     await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS unit TEXT DEFAULT ''`;
+  } catch {}
+  try {
+    await sql`ALTER TABLE todos ADD COLUMN IF NOT EXISTS track_progress BOOLEAN DEFAULT FALSE`;
   } catch {}
 
   try {

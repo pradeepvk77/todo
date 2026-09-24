@@ -193,9 +193,9 @@ export function TodoList({ initialTodos }: TodoListProps) {
   // ─── Core toggle — single source of truth for task completion ────────────
   const handleToggle = (id: number, currentCompleted: boolean) => {
     const targetTask = todos.find((t) => t.id === id);
-    const isMeasurable = targetTask && (targetTask.task_type === "input" || targetTask.task_type === "number");
+    const isMeasurable = Boolean(targetTask?.track_progress);
 
-    if (!currentCompleted && isMeasurable) {
+    if (!currentCompleted && isMeasurable && targetTask) {
       setValueModalTask(targetTask);
       return;
     }

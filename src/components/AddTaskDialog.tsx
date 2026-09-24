@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { addTodo } from "@/app/actions";
 import { generate15MinTimeOptions, DAYS_OF_WEEK, formatAssignedDays } from "@/lib/time-utils";
-import { PlusCircle, Loader2, Clock, FileText, Calendar } from "lucide-react";
+import { PlusCircle, Loader2, Clock, FileText, Calendar, TrendingUp } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,9 @@ export function AddTaskDialog() {
   const [initialValue, setInitialValue] = useState("");
   const [category, setCategory] = useState("Personal");
   const [daySection, setDaySection] = useState<string>("MORNING");
+  const [trackProgress, setTrackProgress] = useState(false);
+  const [targetValue, setTargetValue] = useState("");
+  const [unit, setUnit] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const timeOptions = generate15MinTimeOptions();
@@ -92,6 +95,9 @@ export function AddTaskDialog() {
         assigned_day: assignedDayValue,
         category,
         day_section: daySection,
+        track_progress: trackProgress,
+        target_value: trackProgress && targetValue !== "" ? Number(targetValue) : null,
+        unit: trackProgress ? unit : null,
       });
 
       setTitle("");
@@ -100,6 +106,9 @@ export function AddTaskDialog() {
       setInitialValue("");
       setCategory("Personal");
       setDaySection("MORNING");
+      setTrackProgress(false);
+      setTargetValue("");
+      setUnit("");
       setOpen(false);
     });
   };
@@ -252,6 +261,60 @@ export function AddTaskDialog() {
               </Select>
             </div>
           )}
+
+          {/* Track Progress Toggle */}
+          <div className="space-y-3 p-3 rounded-lg border border-border bg-muted/40">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <Label htmlFor="add-track-progress" className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-primary" />
+                  Track Progress & Completion Value
+                </Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Ask for completed value (e.g. 50 pages, 30 mins) when marking task completed.
+                </p>
+              </div>
+              <input
+                id="add-track-progress"
+                type="checkbox"
+                checked={trackProgress}
+                onChange={(e) => setTrackProgress(e.target.checked)}
+                className="size-4 rounded-xs border-input text-primary focus:ring-primary cursor-pointer shrink-0"
+              />
+            </div>
+
+            {trackProgress && (
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                <div className="space-y-1">
+                  <Label htmlFor="add-target-value" className="text-[11px] font-medium text-foreground">
+                    Target Goal (Optional)
+                  </Label>
+                  <Input
+                    id="add-target-value"
+                    type="number"
+                    step="any"
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(e.target.value)}
+                    placeholder="e.g. 50"
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="add-progress-unit" className="text-[11px] font-medium text-foreground">
+                    Unit / Label (Optional)
+                  </Label>
+                  <Input
+                    id="add-progress-unit"
+                    type="text"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    placeholder="e.g. pages, mins"
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
           <DialogFooter className="pt-2">
             <Button

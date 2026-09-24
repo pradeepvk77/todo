@@ -124,7 +124,7 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
 
   const handleCompleteTask = () => {
     if (!currentTask || isOtherUser) return;
-    const isMeasurable = currentTask.task_type === "input" || currentTask.task_type === "number";
+    const isMeasurable = Boolean(currentTask.track_progress);
     if (isMeasurable) {
       setIsValueModalOpen(true);
       return;

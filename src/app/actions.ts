@@ -238,6 +238,9 @@ export async function addTodo(data: {
   note?: string;
   scheduled_date?: string;
   scheduled_time?: string;
+  track_progress?: boolean;
+  target_value?: number | null;
+  unit?: string | null;
 }) {
   const title = data.title?.trim();
   const task_type = data.task_type || "checkbox";
@@ -270,18 +273,26 @@ export async function addTodo(data: {
     const nextOrder = ((maxRow?.maxOrder as number | null) ?? 0) + 1;
 
     const { parseTargetValueAndUnit } = await import("@/lib/analytics-utils");
-    const { targetValue, unit } = parseTargetValueAndUnit(type_value);
+    const { targetValue: parsedTargetValue, unit: parsedUnit } = parseTargetValueAndUnit(type_value);
+
+    const trackProgress = data.track_progress ?? false;
+    const finalTargetValue = trackProgress
+      ? (data.target_value !== undefined ? data.target_value : parsedTargetValue)
+      : null;
+    const finalUnit = trackProgress
+      ? (data.unit !== undefined ? (data.unit?.trim() || null) : (parsedUnit || null))
+      : null;
 
     const [inserted] = (await sql`
       INSERT INTO todos (
         user_id, title, task_type, type_value, sort_order, assigned_day, category, day_section, last_reset_date,
         priority, task_kind, estimated_duration, difficulty, expected_effort, goal_reason, note, scheduled_date, scheduled_time,
-        target_value, unit
+        target_value, unit, track_progress
       )
       VALUES (
         ${userId}, ${title}, ${task_type}, ${type_value}, ${nextOrder}, ${assigned_day}, ${category}, ${day_section}, ${currentISTDate},
         ${priority}, ${task_kind}, ${estimated_duration}, ${difficulty}, ${expected_effort}, ${goal_reason}, ${note}, ${scheduled_date}, ${scheduled_time},
-        ${targetValue}, ${unit || null}
+        ${finalTargetValue}, ${finalUnit}, ${trackProgress}
       )
       RETURNING id
     `) as { id: number }[];
@@ -1128,6 +1139,9 @@ export async function editTodo(
     type_value?: string;
     assigned_day?: string;
     category?: string;
+    track_progress?: boolean;
+    target_value?: number | null;
+    unit?: string | null;
   }
 ) {
   const title = data.title?.trim();
@@ -1149,12 +1163,20 @@ export async function editTodo(
     }
 
     const { parseTargetValueAndUnit } = await import("@/lib/analytics-utils");
-    const { targetValue, unit } = parseTargetValueAndUnit(type_value);
+    const { targetValue: parsedTargetValue, unit: parsedUnit } = parseTargetValueAndUnit(type_value);
+
+    const trackProgress = data.track_progress ?? false;
+    const finalTargetValue = trackProgress
+      ? (data.target_value !== undefined ? data.target_value : parsedTargetValue)
+      : null;
+    const finalUnit = trackProgress
+      ? (data.unit !== undefined ? (data.unit?.trim() || null) : (parsedUnit || null))
+      : null;
 
     await sql`
       UPDATE todos 
       SET title = ${title}, task_type = ${task_type}, type_value = ${type_value}, assigned_day = ${assigned_day}, category = ${category},
-          target_value = ${targetValue}, unit = ${unit || null}
+          target_value = ${finalTargetValue}, unit = ${finalUnit}, track_progress = ${trackProgress}
       WHERE id = ${id} AND user_id = ${userId}
     `;
     safeRevalidatePath("/");
