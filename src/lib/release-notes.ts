@@ -38,14 +38,14 @@ export interface ReleaseNote {
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: "v1.3",
-    title: "Opt-in Progress Tracking & Stability Fixes 🎯",
+    title: "New Progress Tracking & Faster Task Check-Offs 🎯",
     releaseDate: "2026-09-24",
     releaseType: "major",
     features: [
-      "Added 'Track Progress' opt-in checkbox to Add & Edit Task forms — completion quantity modal now only appears when explicitly enabled",
-      "Added customizable Target Goal (number) and Unit (text) fields for progress tracking (e.g. 50 pages, 30 mins)",
-      "Fixed production database schema migrations for task occurrences and analytics stability",
-      "Streamlined task completion flow for normal tasks with instant completion",
+      "Check off tasks instantly with one tap — popups only appear when progress tracking is enabled",
+      "Optionally enable 'Track Progress' when adding or editing tasks to log custom numbers (e.g. 50 pages, 30 mins)",
+      "Set your own target goals and custom labels (pages, mins, km, glasses)",
+      "General performance enhancements and smoother app experience",
     ],
     sendPushNotification: true,
   },
