@@ -37,6 +37,19 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "v1.3",
+    title: "Opt-in Progress Tracking & Stability Fixes 🎯",
+    releaseDate: "2026-09-24",
+    releaseType: "major",
+    features: [
+      "Added 'Track Progress' opt-in checkbox to Add & Edit Task forms — completion quantity modal now only appears when explicitly enabled",
+      "Added customizable Target Goal (number) and Unit (text) fields for progress tracking (e.g. 50 pages, 30 mins)",
+      "Fixed production database schema migrations for task occurrences and analytics stability",
+      "Streamlined task completion flow for normal tasks with instant completion",
+    ],
+    sendPushNotification: true,
+  },
+  {
     version: "v1.2",
     title: "Complete History, Slide Carousel & Task Analytics Upgrades 🚀",
     releaseDate: "2026-09-23",
