@@ -939,7 +939,7 @@ export async function getIndividualTaskAnalytics(
   // ─── Phase 2: Progress Analytics ───────────────────────────────────────────
   let progressData: ProgressAnalyticsData | null = null;
 
-  const isMeasurableType = todo.task_type === "input" || todo.task_type === "number";
+  const isMeasurableType = Boolean(todo.track_progress) || todo.task_type === "input" || todo.task_type === "number";
 
   if (isMeasurableType) {
     // Query completed occurrences WITH quantitative data for this task in the date range.
