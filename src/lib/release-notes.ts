@@ -42,6 +42,8 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     releaseDate: "2026-09-24",
     releaseType: "major",
     features: [
+      "Bug fixes and stability improvements",
+      "Now you can use the platforma and able to complete your tasks with ease",
       "Check off tasks instantly with one tap — popups only appear when progress tracking is enabled",
       "Optionally enable 'Track Progress' when adding or editing tasks to log custom numbers (e.g. 50 pages, 30 mins)",
       "Set your own target goals and custom labels (pages, mins, km, glasses)",
