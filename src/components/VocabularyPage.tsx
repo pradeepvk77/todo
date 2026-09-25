@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition, useMemo } from "react";
 import { WordCard } from "@/components/WordCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { VocabularyTest } from "@/components/VocabularyTest";
 import { getDailyVocabulary } from "@/app/actions/vocabulary";
 import type { DailyVocabularyData, AllVocabularyWordData } from "@/app/actions/vocabulary";
 import {
@@ -57,6 +58,7 @@ export function VocabularyPageClient({
   const [viewingData, setViewingData] = useState<DailyVocabularyData | null>(todayData);
   const [searchQuery, setSearchQuery] = useState("");
   const [showHistoryDropdown, setShowHistoryDropdown] = useState(false);
+  const [isTestOpen, setIsTestOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -185,12 +187,22 @@ export function VocabularyPageClient({
             20 new English words every day with Hindi meanings
           </p>
         </div>
-        <Link href="/">
-          <Button variant="outline" size="sm" className="gap-2 cursor-pointer shrink-0">
-            <ArrowLeft className="size-3.5" />
-            Home
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            onClick={() => setIsTestOpen(true)}
+            size="sm"
+            className="gap-1.5 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-xs sm:text-sm px-3"
+          >
+            <Sparkles className="size-3.5" />
+            <span>Take Vocabulary Test</span>
           </Button>
-        </Link>
+          <Link href="/">
+            <Button variant="outline" size="sm" className="gap-2 cursor-pointer shrink-0">
+              <ArrowLeft className="size-3.5" />
+              Home
+            </Button>
+          </Link>
+        </div>
       </header>
 
       {/* ── Top Search Input ── */}
@@ -378,6 +390,9 @@ export function VocabularyPageClient({
           )}
         </>
       )}
+
+      {/* Vocabulary Test Modal */}
+      <VocabularyTest isOpen={isTestOpen} onClose={() => setIsTestOpen(false)} />
     </main>
   );
 }

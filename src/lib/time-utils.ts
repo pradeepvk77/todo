@@ -28,6 +28,16 @@ export function getISTDateString(date = new Date()): string {
 }
 
 /**
+ * Returns a date string in IST timezone (Asia/Kolkata) formatted as YYYY-MM-DD,
+ * offset by a given number of days (e.g. -5 for 5 days ago).
+ */
+export function getISTDateOffset(daysOffset: number, fromDate = new Date()): string {
+  const d = new Date(fromDate);
+  d.setDate(d.getDate() + daysOffset);
+  return getISTDateString(d);
+}
+
+/**
  * Returns current day of week in IST timezone (Asia/Kolkata) lowercase (e.g. "saturday")
  */
 export function getISTDayOfWeek(date = new Date()): string {
