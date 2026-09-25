@@ -1,11 +1,17 @@
 "use client";
 
 import { useState, useTransition, useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 import { Todo, DaySection } from "@/lib/db";
 import { toggleTodo, updateTaskSectionAndOrder, updateTaskOrder } from "@/app/actions";
 import { TaskWidget } from "@/components/TaskWidget";
 import { TaskCircleCheckbox } from "@/components/TaskCircleCheckbox";
-import { CompleteTaskValueModal } from "@/components/CompleteTaskValueModal";
+
+// Lazy-load CompleteTaskValueModal — only opened when completing a measurable task
+const CompleteTaskValueModal = dynamic(
+  () => import("@/components/CompleteTaskValueModal").then((mod) => mod.CompleteTaskValueModal),
+  { ssr: false }
+);
 import { formatAssignedDays } from "@/lib/time-utils";
 import { GripVertical, CheckSquare, Calendar, CheckCircle2, Sparkles, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Todo } from "@/lib/db";
 import {
@@ -11,8 +12,16 @@ import {
   getTodayTaskComparison,
   TodayTaskComparisonData,
 } from "@/app/actions";
-import { SkipTaskModal } from "@/components/SkipTaskModal";
-import { CompleteTaskValueModal } from "@/components/CompleteTaskValueModal";
+
+// Lazy-load modals — only needed after explicit button clicks (Skip / Complete)
+const SkipTaskModal = dynamic(
+  () => import("@/components/SkipTaskModal").then((mod) => mod.SkipTaskModal),
+  { ssr: false }
+);
+const CompleteTaskValueModal = dynamic(
+  () => import("@/components/CompleteTaskValueModal").then((mod) => mod.CompleteTaskValueModal),
+  { ssr: false }
+);
 import {
   Clock,
   ArrowRightLeft,

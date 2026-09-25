@@ -1,20 +1,55 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Todo } from "@/lib/db";
 import { getUnreviewedMissedOccurrences } from "@/app/actions";
-import { MissedTaskReviewModal, UnreviewedOccurence } from "@/components/MissedTaskReviewModal";
+import { UnreviewedOccurence } from "@/components/MissedTaskReviewModal";
 import { Greeting } from "@/components/Greeting";
 import { TaskMenu } from "@/components/TaskMenu";
 import { DailyQuote } from "@/components/DailyQuote";
 import { DailyWordStrip } from "@/components/DailyWordStrip";
 import { RunningTaskCard } from "@/components/RunningTaskCard";
-import { TodoList } from "@/components/TodoList";
-import { YouTodoList } from "@/components/YouTodoList";
-import { DayOffModal } from "@/components/DayOffModal";
-import { ListTodo, ChevronDown, ChevronUp, Pencil, PartyPopper, CheckCircle2, AlertCircle, ArrowRight, Sun, Palmtree } from "lucide-react";
+import { ListTodo, ChevronDown, Pencil, PartyPopper, CheckCircle2, AlertCircle, ArrowRight, Palmtree } from "lucide-react";
 import Link from "next/link";
-import { WhatsNewModal } from "@/components/WhatsNewModal";
+
+// ─── Lazy-loaded components ───────────────────────────────────────────────────
+// These are not needed for the initial render. Deferring them keeps @hello-pangea/dnd
+// and the modal code out of the critical JS bundle that the browser must parse
+// before the dashboard becomes interactive.
+
+// TodoList imports @hello-pangea/dnd (~180 KiB). It is only rendered after the
+// user clicks "View All Tasks", so we can defer it safely.
+const TodoList = dynamic(
+  () => import("@/components/TodoList").then((mod) => mod.TodoList),
+  { ssr: false }
+);
+
+// YouTodoList is also only rendered inside the deferred "View All Tasks" panel.
+const YouTodoList = dynamic(
+  () => import("@/components/YouTodoList").then((mod) => mod.YouTodoList),
+  { ssr: false }
+);
+
+// WhatsNewModal: fetched from /api/whats-new after mount. Never shown on initial
+// render — it appears 600ms after mount if there is a new release. Safe to defer.
+const WhatsNewModal = dynamic(
+  () => import("@/components/WhatsNewModal").then((mod) => mod.WhatsNewModal),
+  { ssr: false }
+);
+
+// DayOffModal: only rendered when the user explicitly opens it via the menu.
+const DayOffModal = dynamic(
+  () => import("@/components/DayOffModal").then((mod) => mod.DayOffModal),
+  { ssr: false }
+);
+
+// MissedTaskReviewModal: only rendered after the 9 AM IST check completes and
+// unreviewed items are found. Never shown on the initial render frame.
+const MissedTaskReviewModal = dynamic(
+  () => import("@/components/MissedTaskReviewModal").then((mod) => mod.MissedTaskReviewModal),
+  { ssr: false }
+);
 
 interface DashboardViewProps {
   myTodos: Todo[];
@@ -71,14 +106,16 @@ export function DashboardView({
 
   return (
     <div className="space-y-4">
-      {/* WHAT'S NEW MODAL */}
+      {/* WHAT'S NEW MODAL — lazy loaded, shown 600ms after mount if new release */}
       <WhatsNewModal />
 
-      {/* DAY OFF MODAL */}
-      <DayOffModal
-        isOpen={isDayOffOpen}
-        onClose={() => setIsDayOffOpen(false)}
-      />
+      {/* DAY OFF MODAL — lazy loaded, only opened via menu interaction */}
+      {isDayOffOpen && (
+        <DayOffModal
+          isOpen={isDayOffOpen}
+          onClose={() => setIsDayOffOpen(false)}
+        />
+      )}
 
       {/* NEXT-DAY MISSED TASK REVIEW BANNER (ONLY AFTER 9 AM IST) */}
       {!viewingOtherUser && unreviewed.length > 0 && (
@@ -106,16 +143,18 @@ export function DashboardView({
         </div>
       )}
 
-      {/* MISSED TASK REVIEW MODAL */}
-      <MissedTaskReviewModal
-        isOpen={isReviewOpen}
-        occurrences={unreviewed}
-        onClose={() => setIsReviewOpen(false)}
-        onCompleteAll={() => {
-          setIsReviewOpen(false);
-          setUnreviewed([]);
-        }}
-      />
+      {/* MISSED TASK REVIEW MODAL — lazy loaded, only rendered when unreviewed items exist */}
+      {isReviewOpen && (
+        <MissedTaskReviewModal
+          isOpen={isReviewOpen}
+          occurrences={unreviewed}
+          onClose={() => setIsReviewOpen(false)}
+          onCompleteAll={() => {
+            setIsReviewOpen(false);
+            setUnreviewed([]);
+          }}
+        />
+      )}
 
       {/* 1. GREETING & HEADER */}
       <header className="flex items-center justify-between gap-4 pb-3 border-b border-border/70 w-full">
@@ -173,7 +212,7 @@ export function DashboardView({
           <div className="space-y-1.5 max-w-sm mx-auto">
             <h3 className="text-xl font-bold text-foreground tracking-tight">Amazing work!</h3>
             <p className="text-xs sm:text-sm text-muted-foreground font-medium leading-relaxed">
-              You’ve completed everything for today. Take a moment to be proud of your progress.
+              You've completed everything for today. Take a moment to be proud of your progress.
             </p>
           </div>
         </div>
