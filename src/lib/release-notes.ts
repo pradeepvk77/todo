@@ -37,6 +37,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "v1.4",
+    title: "Vocabulary Recall Test & Faster Dashboard 🧠⚡",
+    releaseDate: "2026-09-25",
+    releaseType: "major",
+    features: [
+      "Added a 10-question vocabulary recall test with a shared 20-second timer, instant feedback, answer review, and stable layout.",
+      "Improved dashboard performance with faster loading, lazy-loaded modals, optimized data fetching, and reduced unnecessary requests and re-renders.",
+    ],
+    sendPushNotification: true,
+  },
+  {
     version: "v1.3",
     title: "New Progress Tracking & Faster Task Check-Offs 🎯",
     releaseDate: "2026-09-24",
