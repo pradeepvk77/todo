@@ -108,6 +108,8 @@ export function DailyQuote() {
         aria-hidden="true"
         fetchPriority="high"
         decoding="async"
+        width={836}
+        height={157}
         className="absolute inset-0 w-full h-full object-cover object-center"
       />
 

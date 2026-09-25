@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Todo } from "@/lib/db";
+import type { VocabularyWordData } from "@/app/actions/vocabulary";
+import type { TaskPerformanceHistory, TodayTaskComparisonData } from "@/app/actions";
 import { getUnreviewedMissedOccurrences } from "@/app/actions";
 import { UnreviewedOccurence } from "@/components/MissedTaskReviewModal";
 import { Greeting } from "@/components/Greeting";
@@ -10,7 +12,7 @@ import { TaskMenu } from "@/components/TaskMenu";
 import { DailyQuote } from "@/components/DailyQuote";
 import { DailyWordStrip } from "@/components/DailyWordStrip";
 import { RunningTaskCard } from "@/components/RunningTaskCard";
-import { ListTodo, ChevronDown, Pencil, PartyPopper, CheckCircle2, AlertCircle, ArrowRight, Palmtree } from "lucide-react";
+import { ListTodo, ChevronDown, Pencil, PartyPopper, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 // ─── Lazy-loaded components ───────────────────────────────────────────────────
@@ -56,6 +58,10 @@ interface DashboardViewProps {
   otherTodos: Todo[];
   otherUserName: string;
   viewingOtherUser: boolean;
+  initialDailyWord?: VocabularyWordData | null;
+  initialUnreviewed?: UnreviewedOccurence[];
+  initialTaskHistory?: TaskPerformanceHistory | null;
+  initialTaskComparison?: TodayTaskComparisonData | null;
 }
 
 export function DashboardView({
@@ -63,16 +69,20 @@ export function DashboardView({
   otherTodos,
   otherUserName,
   viewingOtherUser,
+  initialDailyWord,
+  initialUnreviewed,
+  initialTaskHistory,
+  initialTaskComparison,
 }: DashboardViewProps) {
   const [showAllTasks, setShowAllTasks] = useState(false);
-  const [unreviewed, setUnreviewed] = useState<UnreviewedOccurence[]>([]);
-  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [unreviewed, setUnreviewed] = useState<UnreviewedOccurence[]>(initialUnreviewed ?? []);
+  const [isReviewOpen, setIsReviewOpen] = useState((initialUnreviewed ?? []).length > 0);
   const [isDayOffOpen, setIsDayOffOpen] = useState(false);
   const allTasksRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!viewingOtherUser) {
-      // Check current IST hour — popup should only be visible AFTER 9:00 AM IST
+    if (!viewingOtherUser && initialUnreviewed === undefined) {
+      // Fallback check current IST hour if initialUnreviewed was not passed by server
       const nowIST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
       const currentHour = nowIST.getHours();
 
@@ -87,7 +97,7 @@ export function DashboardView({
           .catch((err) => console.error(err));
       }
     }
-  }, [viewingOtherUser]);
+  }, [viewingOtherUser, initialUnreviewed]);
 
   const targetTodos = viewingOtherUser ? otherTodos : myTodos;
   const totalCount = targetTodos.length;
@@ -170,7 +180,7 @@ export function DashboardView({
       {!viewingOtherUser && <DailyQuote />}
 
       {/* 3. DAILY WORD */}
-      {!viewingOtherUser && <DailyWordStrip />}
+      {!viewingOtherUser && <DailyWordStrip initialWord={initialDailyWord} />}
 
       {/* IMAGE 4 ORDERING: 1. TASK PROGRESS CARD */}
       <div className="rounded-2xl border border-border/80 bg-card p-4 sm:p-4.5 space-y-3 shadow-2xs">
@@ -217,7 +227,12 @@ export function DashboardView({
           </div>
         </div>
       ) : (
-        <RunningTaskCard todos={targetTodos} isOtherUser={viewingOtherUser} />
+        <RunningTaskCard
+          todos={targetTodos}
+          isOtherUser={viewingOtherUser}
+          initialHistory={initialTaskHistory}
+          initialComparison={initialTaskComparison}
+        />
       )}
 
       {/* 6. VIEW ALL TASKS SMOOTH SCROLL BUTTON */}

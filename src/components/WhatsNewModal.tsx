@@ -18,22 +18,27 @@ export function WhatsNewModal() {
   const [closing, setClosing] = useState(false);
 
   useEffect(() => {
-    fetch("/api/whats-new")
-      .then((res) => {
-        if (!res.ok) return null;
-        return res.json() as Promise<{ show: boolean; release: ReleaseData | null }>;
-      })
-      .then((data) => {
-        if (!data || !data.show || !data.release) return;
+    // Defer checking release notes until initial page load and hydration have completed
+    const timer = setTimeout(() => {
+      fetch("/api/whats-new")
+        .then((res) => {
+          if (!res.ok) return null;
+          return res.json() as Promise<{ show: boolean; release: ReleaseData | null }>;
+        })
+        .then((data) => {
+          if (!data || !data.show || !data.release) return;
 
-        // Fast client-side guard — if localStorage already has it, skip showing
-        const lsKey = `whats_new_seen_v${data.release.version}`;
-        if (localStorage.getItem(lsKey)) return;
+          // Fast client-side guard — if localStorage already has it, skip showing
+          const lsKey = `whats_new_seen_v${data.release.version}`;
+          if (typeof window !== "undefined" && localStorage.getItem(lsKey)) return;
 
-        setRelease(data.release);
-        setTimeout(() => setVisible(true), 600);
-      })
-      .catch(() => {});
+          setRelease(data.release);
+          setVisible(true);
+        })
+        .catch(() => {});
+    }, 2500);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const dismiss = async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Todo } from "@/lib/db";
@@ -47,9 +47,16 @@ import {
 interface RunningTaskCardProps {
   todos: Todo[];
   isOtherUser?: boolean;
+  initialHistory?: TaskPerformanceHistory | null;
+  initialComparison?: TodayTaskComparisonData | null;
 }
 
-export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardProps) {
+export function RunningTaskCard({
+  todos,
+  isOtherUser = false,
+  initialHistory = null,
+  initialComparison = null,
+}: RunningTaskCardProps) {
   // Only tasks that are not completed and not skipped
   const pendingTodos = todos.filter((t) => !t.completed && !t.skipped);
   const initialTask = pendingTodos.length > 0 ? pendingTodos[0] : null;
@@ -58,10 +65,11 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
   const [isSwitchOpen, setIsSwitchOpen] = useState(false);
   const [isSkipOpen, setIsSkipOpen] = useState(false);
   const [isValueModalOpen, setIsValueModalOpen] = useState(false);
-  const [history, setHistory] = useState<TaskPerformanceHistory | null>(null);
-  const [comparison, setComparison] = useState<TodayTaskComparisonData | null>(null);
+  const [history, setHistory] = useState<TaskPerformanceHistory | null>(initialHistory);
+  const [comparison, setComparison] = useState<TodayTaskComparisonData | null>(initialComparison);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const lastFetchedTaskId = useRef<number | null>(initialTask?.id ?? null);
 
   // Slide animation state: "idle" | "slide-out-left" | "slide-in-start" | "slide-in-end"
   const [slideAnim, setSlideAnim] = useState<"idle" | "slide-out-left" | "slide-in-start" | "slide-in-end">("idle");
@@ -78,13 +86,24 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
     if (!currentTask) {
       setHistory(null);
       setComparison(null);
+      lastFetchedTaskId.current = null;
+      return;
+    }
+
+    // Skip client fetch on mount if initial server props were provided for this task
+    if (
+      lastFetchedTaskId.current === currentTask.id &&
+      history !== null &&
+      comparison !== null
+    ) {
       return;
     }
 
     let isMounted = true;
     setLoadingHistory(true);
+    lastFetchedTaskId.current = currentTask.id;
     Promise.all([
-      getTaskPerformanceHistory(currentTask.id),
+      getTaskPerformanceHistory(currentTask.id, isOtherUser ? "other" : undefined),
       getTodayTaskComparison(currentTask.id),
     ])
       .then(([histData, compData]) => {
@@ -101,7 +120,7 @@ export function RunningTaskCard({ todos, isOtherUser = false }: RunningTaskCardP
     return () => {
       isMounted = false;
     };
-  }, [currentTask?.id]);
+  }, [currentTask?.id, isOtherUser]);
 
   const triggerSlideTransition = (nextTaskId: number | null) => {
     setSlideAnim("slide-out-left");

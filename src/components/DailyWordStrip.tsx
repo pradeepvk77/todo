@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sparkles, Volume2, ArrowRight } from "lucide-react";
 import type { VocabularyWordData } from "@/app/actions/vocabulary";
-import { HINDI_DICTIONARY } from "@/lib/vocabulary-words";
 
 function getISTDateString(): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -18,11 +17,20 @@ function getISTDateString(): string {
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
-export function DailyWordStrip() {
-  const [randomWord, setRandomWord] = useState<VocabularyWordData | null>(null);
-  const [loading, setLoading] = useState(true);
+interface DailyWordStripProps {
+  initialWord?: VocabularyWordData | null;
+}
+
+export function DailyWordStrip({ initialWord }: DailyWordStripProps) {
+  const [randomWord, setRandomWord] = useState<VocabularyWordData | null>(initialWord ?? null);
+  const [loading, setLoading] = useState(!initialWord);
 
   useEffect(() => {
+    if (initialWord) {
+      setLoading(false);
+      return;
+    }
+
     async function loadTodayWord() {
       const todayDate = getISTDateString();
       const cacheKey = `todo_vocab_daily_${todayDate}`;
@@ -67,7 +75,7 @@ export function DailyWordStrip() {
       }
     }
     void loadTodayWord();
-  }, []);
+  }, [initialWord]);
 
   const speakWord = (e?: React.MouseEvent) => {
     if (e) {
@@ -111,10 +119,7 @@ export function DailyWordStrip() {
 
   if (!randomWord) return null;
 
-  const hindiText =
-    randomWord.hindiMeaning ||
-    HINDI_DICTIONARY[randomWord.word.toLowerCase()] ||
-    "";
+  const hindiText = randomWord.hindiMeaning || "";
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card p-3.5 sm:p-4 shadow-2xs flex items-center justify-between gap-3">
