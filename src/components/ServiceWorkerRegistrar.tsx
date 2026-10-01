@@ -1,15 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
 /**
  * Registers the Service Worker, manages safe update prompts without interrupting
  * active users, and guarantees that first installs do not reload the page.
+ *
+ * Also listens for SW_BACKGROUND_UPDATED messages from the service worker so
+ * router.refresh() is called after the SW serves stale HTML from cache —
+ * ensuring live server data is loaded shortly after the instant shell render.
  */
 export function ServiceWorkerRegistrar() {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
   const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
+  // Debounce: only call router.refresh() once even if multiple SW_BACKGROUND_UPDATED
+  // messages arrive in quick succession (e.g. two open tabs).
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -51,6 +61,22 @@ export function ServiceWorkerRegistrar() {
       window.addEventListener("load", () => void registerWorker(), { once: true });
     }
 
+    // Handle SW → client messages
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "SW_BACKGROUND_UPDATED") {
+        // SW served stale HTML from cache; fresh HTML is now in cache.
+        // Call router.refresh() to re-fetch server components with live data.
+        // Debounce to 300ms in case of multiple tabs.
+        if (refreshTimer.current) clearTimeout(refreshTimer.current);
+        refreshTimer.current = setTimeout(() => {
+          startTransition(() => {
+            router.refresh();
+          });
+        }, 300);
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", handleMessage);
+
     // Only reload on controller change if the page was ALREADY controlled.
     // If it was the first installation, do NOT reload!
     let reloading = false;
@@ -64,8 +90,11 @@ export function ServiceWorkerRegistrar() {
     navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
     return () => {
       navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
+      navigator.serviceWorker.removeEventListener("message", handleMessage);
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
-  }, []);
+  }, [router, startTransition]);
+
 
   const handleUpdate = () => {
     if (waitingWorker) {

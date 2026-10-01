@@ -1,8 +1,8 @@
 /// <reference lib="webworker" />
 
 // ─── Cache versioning ───────────────────────────────────────────────────────
-const CURRENT_VERSION = 'v4';
-const PREVIOUS_STATIC_CACHE = 'static-v3'; // Retained for 1 generation to prevent ChunkLoadError
+const CURRENT_VERSION = 'v5';
+const PREVIOUS_STATIC_CACHE = 'static-v4'; // Retained for 1 generation to prevent ChunkLoadError
 const SHELL_CACHE   = `shell-${CURRENT_VERSION}`;
 const STATIC_CACHE  = `static-${CURRENT_VERSION}`;
 const IMAGE_CACHE   = `image-${CURRENT_VERSION}`;
@@ -163,42 +163,77 @@ async function staleWhileRevalidate(request, cacheName) {
 }
 
 /**
- * HTML Navigation: Network-First with 3s timeout.
- * - If network responds with redirect (307) or error, returns it as-is (NEVER replaces redirect with offline page)
- * - Caches only response.ok (200) HTML
- * - If network times out or fails (airplane mode), serves cached HTML
- * - Only serves offline.html if no cached HTML exists
+ * HTML Navigation: Stale-While-Revalidate.
+ *
+ * Repeat opens (cached shell exists):
+ *   1. Return cached HTML immediately — shell appears without waiting on network.
+ *   2. Kick off a background network fetch to refresh the cache.
+ *   3. After background fetch completes, post SW_BACKGROUND_UPDATED to all clients
+ *      so React can call router.refresh() to pull fresh server data.
+ *
+ * First opens (no cache yet) or non-200 network responses:
+ *   - Wait for network; cache on 200 OK.
+ *   - Redirects (307 etc.) and errors pass through as-is — never replaced with
+ *     offline page or stale HTML.
+ *
+ * Security / privacy:
+ *   - HTML cache is keyed by URL. Since both users share '/', logout MUST send
+ *     CLEAR_USER_CACHE so the next user never sees stale HTML from the previous session.
+ *   - We check for the presence of a Set-Cookie/Location redirect in the
+ *     background response: if it redirects (auth expired), we delete the cache
+ *     and let the client nav naturally expire on next real visit.
  */
 async function navigationWithFallback(request) {
   const cache = await caches.open(SHELL_CACHE);
+  const cached = await cache.match(request);
 
+  // ── Helper: background network fetch ─────────────────────────────────────
+  async function refreshInBackground() {
+    try {
+      const networkResponse = await fetch(request);
+
+      if (networkResponse.redirected || !networkResponse.ok) {
+        // Auth expired / server error: evict the stale cache entry so the next
+        // navigation goes through the network and picks up the redirect.
+        await cache.delete(request);
+        return;
+      }
+
+      // Update cache with fresh HTML
+      await cache.put(request, networkResponse.clone());
+
+      // Notify all clients so they can call router.refresh()
+      const allClients = await self.clients.matchAll({ type: 'window' });
+      for (const client of allClients) {
+        client.postMessage({ type: 'SW_BACKGROUND_UPDATED' });
+      }
+    } catch {
+      // Offline or network error — cached version stays valid, no notification sent
+    }
+  }
+
+  if (cached) {
+    // Serve from cache immediately; revalidate in background (fire-and-forget)
+    refreshInBackground();
+    return cached;
+  }
+
+  // ── No cache yet: wait for the network ───────────────────────────────────
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const networkResponse = await fetch(request);
 
-    const networkResponse = await fetch(request, { signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    // If it's a redirect (3xx) or auth error (401/403/5xx), return as-is
-    if (networkResponse.type === 'opaqueredirect' || networkResponse.redirected || !networkResponse.ok) {
+    // Redirects and errors pass through as-is
+    if (networkResponse.redirected || !networkResponse.ok) {
       return networkResponse;
     }
 
-    // Cache clean 200 OK HTML
+    // Cache the first successful 200 response
     cache.put(request, networkResponse.clone());
     return networkResponse;
   } catch {
-    // Network timed out or connection offline: check cache for this URL
-    const cachedResponse = await cache.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-
-    // Fall back to offline page
+    // Offline on very first open: show offline fallback
     const offlinePage = await caches.match('/offline.html');
-    if (offlinePage) {
-      return offlinePage;
-    }
+    if (offlinePage) return offlinePage;
 
     return new Response('<h1>Offline</h1><p>Please check your internet connection.</p>', {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
