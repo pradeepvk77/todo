@@ -5,16 +5,9 @@ import { getSession } from "@/lib/session";
 import { getISTDateString } from "@/lib/time-utils";
 import { getWordCandidatesForDate, WordEntry, getFallbackWordDetails, HINDI_DICTIONARY } from "@/lib/vocabulary-words";
 
-let vocabDbInitialized = false;
 async function ensureVocabDb() {
-  if (!vocabDbInitialized) {
-    try {
-      await initVocabularyTables();
-      vocabDbInitialized = true;
-    } catch (error) {
-      console.error("Failed to initialize vocabulary tables:", error);
-    }
-  }
+  // Vocabulary tables and indexes are maintained via migrations/scripts.
+  return;
 }
 
 export interface VocabularyWordData {

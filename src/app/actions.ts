@@ -39,15 +39,10 @@ export interface AnalyticsData {
   taskStreaks: { title: string; streak: number }[];
 }
 
-let dbInitPromise: Promise<void> | null = null;
+// Database schema and indexes are maintained via migrations/scripts.
+// ensureDb is a no-op on the request path to avoid DDL latency and catalog locks.
 async function ensureDb() {
-  if (!dbInitPromise) {
-    dbInitPromise = initDb().catch((error) => {
-      console.error("Failed to initialize database:", error);
-      dbInitPromise = null;
-    });
-  }
-  return trackStep("ensureDb", () => dbInitPromise!);
+  return;
 }
 
 async function requireUser() {
@@ -150,19 +145,37 @@ async function migrateLegacyTaskSections(userId: string) {
 }
 
 /**
- * Fetch todos for logged in user.
+ * Run daily maintenance for a user: reset, migrate sections, detect no-action.
+ * Called via next/server after() so it runs AFTER the response is sent.
+ * 
+ * Idempotency: each operation uses WHERE guards so concurrent calls are safe.
+ * If after() is not available (fallback), the caller may skip or call sync.
+ */
+export async function runDailyMaintenance(userId: string, otherUserId: string): Promise<void> {
+  // Run both users' maintenance in parallel — they are independent
+  await Promise.all([
+    (async () => {
+      await checkAndPerformDailyReset(userId);
+      await migrateLegacyTaskSections(userId);
+      await detectNoActionOccurrences(userId);
+    })(),
+    (async () => {
+      await checkAndPerformDailyReset(otherUserId);
+      await migrateLegacyTaskSections(otherUserId);
+      await detectNoActionOccurrences(otherUserId);
+    })(),
+  ]);
+}
+
+/**
+ * Fetch todos for the logged-in user.
+ * Maintenance (reset, migration, no-action detection) is intentionally NOT called here.
+ * It is scheduled via after() in the page component so it runs after the response.
  */
 export async function getTodos(dayFilter: string = "today"): Promise<{ todos: Todo[]; todayDay: string }> {
   try {
     await ensureDb();
     const userId = await requireUser();
-    
-    // Check and trigger daily reset at midnight IST
-    await checkAndPerformDailyReset(userId);
-    await migrateLegacyTaskSections(userId);
-
-    // Detect and log no_action task occurrences for past days
-    await detectNoActionOccurrences(userId);
 
     const todayDay = getISTDayOfWeek();
     const rawUserRows = await trackStep("getTodos SELECT", () => sql`
@@ -197,11 +210,6 @@ export async function getOtherUserTodos(): Promise<{ userId: string; todos: Todo
     await ensureDb();
     const userId = await requireUser();
     const otherUserId = getOtherUserId(userId);
-
-    // Perform daily reset check for other user
-    await checkAndPerformDailyReset(otherUserId);
-    await migrateLegacyTaskSections(otherUserId);
-    await detectNoActionOccurrences(otherUserId);
 
     const todayDay = getISTDayOfWeek();
     const rawOtherRows = await trackStep("getOtherUserTodos SELECT", () => sql`
@@ -576,10 +584,7 @@ export async function setMissedTaskReason(
 
 export async function getUnreviewedMissedOccurrences() {
   try {
-    await ensureDb();
     const userId = await requireUser();
-    const { detectNoActionOccurrences } = await import("@/lib/no-action-detector");
-    await detectNoActionOccurrences(userId, 7);
 
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
