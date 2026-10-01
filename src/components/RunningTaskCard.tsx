@@ -180,9 +180,9 @@ export function RunningTaskCard({
   return (
     <div className="space-y-3.5 overflow-hidden">
       {/* SECTION 2 (THIS TASK'S TREND & TODAY'S COMPARISON) GOES FIRST (TOP) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 min-h-[214px]">
         {/* LEFT CARD: THIS TASK'S TREND + TODAY'S COMPARISON */}
-        <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3 shadow-2xs flex flex-col justify-between">
+        <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3 shadow-2xs flex flex-col justify-between min-h-[214px]">
           <div>
             <div className="flex items-center justify-between text-xs mb-2">
               <span className="font-bold text-foreground">This Task&apos;s Trend</span>
@@ -237,11 +237,11 @@ export function RunningTaskCard({
                   </span>
                 </div>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                  <span className="text-base font-black text-emerald-700 dark:text-emerald-400">
                     {comparison ? `${comparison.myTodayPercentage}%` : "0%"}
                   </span>
                   {comparison?.myStatus === "completed" && (
-                    <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded shrink-0">
+                    <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded shrink-0">
                       ✓ Done
                     </span>
                   )}
@@ -273,14 +273,14 @@ export function RunningTaskCard({
         </div>
 
         {/* RIGHT CARD: CURRENT STREAK COMPONENT & DIRECT TASK ANALYTICS BUTTON */}
-        <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs flex flex-col justify-between">
+        <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3.5 shadow-2xs flex flex-col justify-between min-h-[214px]">
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs font-bold text-foreground">
               <span className="flex items-center gap-1.5">
                 <Target className="size-4 text-emerald-500 shrink-0" />
                 <span>Current Streak</span>
               </span>
-              <span className="text-[11px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+              <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30">
                 {history ? `${history.consistencyPercentage}% consistency` : "100% consistency"}
               </span>
             </div>
@@ -302,6 +302,7 @@ export function RunningTaskCard({
           <div className="pt-2 border-t border-border/60">
             <Link
               href={`/analytics?taskId=${currentTask.id}${isOtherUser ? "&user=other" : ""}`}
+              prefetch={false}
               className="w-full py-2.5 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
               title={`View direct task insight for ${currentTask.title}`}
             >
@@ -328,7 +329,7 @@ export function RunningTaskCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="size-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
+            <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
               RUNNING TASK
             </span>
           </div>
@@ -425,7 +426,7 @@ export function RunningTaskCard({
               type="button"
               disabled={isPending}
               onClick={handleCompleteTask}
-              className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-80"
+              className="flex-1 py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-700/20 transition-all cursor-pointer disabled:opacity-80"
             >
               {isPending ? (
                 <>

@@ -78,6 +78,7 @@ export function TaskMenu({
           {!otherUser && (
             <Link
               href="/edit-tasks"
+              prefetch={false}
               onClick={closeMenu}
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
             >
@@ -102,6 +103,7 @@ export function TaskMenu({
           {!otherUser && (
             <Link
               href="/settings"
+              prefetch={false}
               onClick={closeMenu}
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
             >
@@ -111,6 +113,7 @@ export function TaskMenu({
           )}
           <Link
             href={`/analytics${suffix}`}
+            prefetch={false}
             onClick={closeMenu}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
           >
@@ -120,6 +123,7 @@ export function TaskMenu({
           {!otherUser && (
             <Link
               href="/vocabulary"
+              prefetch={false}
               onClick={closeMenu}
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
             >
@@ -129,6 +133,7 @@ export function TaskMenu({
           )}
           <Link
             href={`/history${suffix}`}
+            prefetch={false}
             onClick={closeMenu}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
           >
@@ -140,6 +145,7 @@ export function TaskMenu({
 
           <Link
             href={otherUser ? "/" : "/?user=other"}
+            prefetch={false}
             onClick={closeMenu}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
           >

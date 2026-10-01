@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import type { TimeOfDay } from "@/lib/time-utils";
+
 type QuoteItem = { text: string; author: string };
 type StoredQuotes = { date: string; quotes: QuoteItem[] };
 
@@ -15,22 +17,29 @@ const emptySubscribe = () => () => {};
 // Using standard <img> elements (rather than CSS background-image) lets the
 // browser's preload scanner discover the LCP image in the HTML stream instead
 // of waiting until React hydrates the component.
+//
+// Phase 2 fix: the server now passes `initialTimeOfDay` so the *initial* HTML
+// always contains the correct image URL. The preload scanner can find it at
+// HTML parse time, eliminating the 4.1 s resource-load-delay from the LCP audit.
 const timeOfDayStyles = {
   morning:  { image: "/morning.webp",   overlay: "bg-white/50 backdrop-blur-xs",       text: "text-slate-950", authorText: "text-slate-700 font-medium" },
   afternoon:{ image: "/afternoon.webp", overlay: "bg-white/50 backdrop-blur-xs",       text: "text-slate-950", authorText: "text-slate-700 font-medium" },
   evening:  { image: "/evening.webp",   overlay: "bg-slate-950/50 backdrop-blur-xs",   text: "text-white",     authorText: "text-white/90 font-medium" },
   night:    { image: "/night.webp",     overlay: "bg-slate-950/60 backdrop-blur-xs",   text: "text-white",     authorText: "text-white/90 font-medium" },
-};
+} satisfies Record<TimeOfDay, { image: string; overlay: string; text: string; authorText: string }>;
 
-type TimeOfDay = keyof typeof timeOfDayStyles;
-
-function getTimeOfDay(): TimeOfDay {
-  const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Kolkata" }).format(new Date()));
+function getClientTimeOfDay(): TimeOfDay {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour: "numeric",
+      hourCycle: "h23",
+    }).format(new Date())
+  );
   if (hour < 5 || hour >= 20) return "night";
-  if (hour >= 5 && hour < 12) return "morning";
+  if (hour < 12) return "morning";
   if (hour < 17) return "afternoon";
-  if (hour < 20) return "evening";
-  return "night";
+  return "evening";
 }
 
 function getISTDate() {
@@ -58,10 +67,26 @@ function readStoredQuotes() {
   return null;
 }
 
-export function DailyQuote() {
+interface DailyQuoteProps {
+  /**
+   * Server-computed IST time-of-day bucket. Passed from the server component so the
+   * initial HTML contains the correct hero image URL — making it discoverable by the
+   * browser's preload scanner and fixing the 4.1 s LCP resource-load-delay.
+   */
+  initialTimeOfDay?: TimeOfDay;
+}
+
+export function DailyQuote({ initialTimeOfDay = "morning" }: DailyQuoteProps) {
   const [quote, setQuote] = useState<QuoteItem>(fallbackQuote);
-  const timeOfDay = useSyncExternalStore<TimeOfDay>(emptySubscribe, getTimeOfDay, () => "morning");
-  const background = timeOfDayStyles[timeOfDay];
+
+  // Use server value as the SSR snapshot so the initial HTML matches the real image.
+  // After hydration, switch to the live client value (in case time bucket changed).
+  const timeOfDay = useSyncExternalStore<TimeOfDay>(
+    emptySubscribe,
+    getClientTimeOfDay,
+    () => initialTimeOfDay ?? "morning"   // ← SSR snapshot = server value, safe fallback
+  );
+  const background = timeOfDayStyles[timeOfDay] ?? timeOfDayStyles.morning;
 
   useEffect(() => {
     const loadQuotes = async () => {
@@ -94,12 +119,10 @@ export function DailyQuote() {
       aria-label="Daily quote"
     >
       {/*
-        Background image rendered as a standard <img> element instead of CSS background-image.
-        This lets the browser's HTML preload scanner discover and fetch the image immediately
-        from the server-rendered HTML, without waiting for React hydration.
-        - WebP images are 10–14× smaller than the original PNGs (9.7 KiB vs 173 KiB).
-        - fetchPriority="high" signals this is the likely LCP element.
-        - aria-hidden prevents screen readers from announcing a decorative image.
+        Background image: rendered as a standard <img> (not CSS background-image) so the
+        browser's HTML preload scanner can discover and begin fetching it as soon as the
+        HTML bytes arrive — before React hydrates. The server passes `initialTimeOfDay`
+        so the SSR snapshot is the correct time bucket, not always "morning".
       */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img

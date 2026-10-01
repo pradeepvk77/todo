@@ -48,6 +48,34 @@ export function getISTDayOfWeek(date = new Date()): string {
   return istFormatter.format(date).toLowerCase();
 }
 
+export type TimeOfDay = "morning" | "afternoon" | "evening" | "night";
+
+/**
+ * Returns the current IST hour (0–23).
+ */
+export function getISTHour(date = new Date()): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour: "numeric",
+      hourCycle: "h23",
+    }).format(date)
+  );
+}
+
+/**
+ * Returns the time-of-day bucket for the current IST time.
+ * Used server-side to select the LCP hero image before the HTML is sent,
+ * so the browser's preload scanner can discover and fetch the correct image.
+ */
+export function getISTTimeOfDay(date = new Date()): TimeOfDay {
+  const hour = getISTHour(date);
+  if (hour < 5 || hour >= 20) return "night";
+  if (hour < 12) return "morning";
+  if (hour < 17) return "afternoon";
+  return "evening";
+}
+
 /**
  * Alarm-style Day Formatter: formats a comma-separated days string (e.g., "monday,friday")
  * into a user-friendly label (e.g., "Mon, Fri", "Weekdays", "Weekends", "Everyday", or "No Days").

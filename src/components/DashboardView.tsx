@@ -53,6 +53,8 @@ const MissedTaskReviewModal = dynamic(
   { ssr: false }
 );
 
+import type { TimeOfDay } from "@/lib/time-utils";
+
 interface DashboardViewProps {
   myTodos: Todo[];
   otherTodos: Todo[];
@@ -62,6 +64,7 @@ interface DashboardViewProps {
   initialUnreviewed?: UnreviewedOccurence[];
   initialTaskHistory?: TaskPerformanceHistory | null;
   initialTaskComparison?: TodayTaskComparisonData | null;
+  initialTimeOfDay?: TimeOfDay;
 }
 
 export function DashboardView({
@@ -73,6 +76,7 @@ export function DashboardView({
   initialUnreviewed,
   initialTaskHistory,
   initialTaskComparison,
+  initialTimeOfDay,
 }: DashboardViewProps) {
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [unreviewed, setUnreviewed] = useState<UnreviewedOccurence[]>(initialUnreviewed ?? []);
@@ -177,7 +181,7 @@ export function DashboardView({
       </header>
 
       {/* 2. QUOTE */}
-      {!viewingOtherUser && <DailyQuote />}
+      {!viewingOtherUser && <DailyQuote initialTimeOfDay={initialTimeOfDay} />}
 
       {/* 3. DAILY WORD */}
       {!viewingOtherUser && <DailyWordStrip initialWord={initialDailyWord} />}
@@ -264,6 +268,7 @@ export function DashboardView({
                 {!viewingOtherUser && (
                   <Link
                     href="/edit-tasks"
+                    prefetch={false}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                   >
                     <Pencil className="size-3" />
