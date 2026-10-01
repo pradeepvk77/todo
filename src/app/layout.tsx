@@ -20,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cn("h-full antialiased font-sans")}>
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+    <html lang="en" className={cn("h-full antialiased font-sans")} suppressHydrationWarning>
+      <body className="min-h-full flex flex-col bg-background text-foreground" suppressHydrationWarning>
         {/* Global offline indicator — appears on any page when device loses connection */}
         <OfflineBar />
         {children}

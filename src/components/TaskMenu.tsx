@@ -78,6 +78,7 @@ export function TaskMenu({
           {!otherUser && (
             <Link
               href="/edit-tasks"
+              prefetch={false}
               onClick={closeMenu}
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
             >
@@ -102,6 +103,7 @@ export function TaskMenu({
           {!otherUser && (
             <Link
               href="/settings"
+              prefetch={false}
               onClick={closeMenu}
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
             >
@@ -111,6 +113,7 @@ export function TaskMenu({
           )}
           <Link
             href={`/analytics${suffix}`}
+            prefetch={false}
             onClick={closeMenu}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
           >
@@ -120,6 +123,7 @@ export function TaskMenu({
           {!otherUser && (
             <Link
               href="/vocabulary"
+              prefetch={false}
               onClick={closeMenu}
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
             >
@@ -129,6 +133,7 @@ export function TaskMenu({
           )}
           <Link
             href={`/history${suffix}`}
+            prefetch={false}
             onClick={closeMenu}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
           >
@@ -140,6 +145,7 @@ export function TaskMenu({
 
           <Link
             href={otherUser ? "/" : "/?user=other"}
+            prefetch={false}
             onClick={closeMenu}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-popover-foreground hover:bg-muted transition-colors cursor-pointer"
           >
@@ -147,10 +153,19 @@ export function TaskMenu({
             {otherUser ? "My tasks" : `${otherUserName}'s tasks`}
           </Link>
 
-          <form action={logoutAction} onSubmit={closeMenu}>
+          <form
+            action={logoutAction}
+            onSubmit={() => {
+              closeMenu();
+              // Clear SW HTML cache before redirect so the next user never
+              // sees stale HTML from the previous session.
+              if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: "CLEAR_USER_CACHE" });
+              }
+            }}
+          >
             <button
               type="submit"
-              onClick={closeMenu}
               className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
             >
               <LogOut className="size-4" />

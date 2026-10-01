@@ -5,16 +5,9 @@ import { getSession } from "@/lib/session";
 import { getISTDateString } from "@/lib/time-utils";
 import { getWordCandidatesForDate, WordEntry, getFallbackWordDetails, HINDI_DICTIONARY } from "@/lib/vocabulary-words";
 
-let vocabDbInitialized = false;
 async function ensureVocabDb() {
-  if (!vocabDbInitialized) {
-    try {
-      await initVocabularyTables();
-      vocabDbInitialized = true;
-    } catch (error) {
-      console.error("Failed to initialize vocabulary tables:", error);
-    }
-  }
+  // Vocabulary tables and indexes are maintained via migrations/scripts.
+  return;
 }
 
 export interface VocabularyWordData {
@@ -150,7 +143,15 @@ export async function getDailyVocabulary(
         WHERE daily_vocabulary_id = ${existing.id}
         ORDER BY id ASC
       `) as VocabularyWord[];
-      return { date: targetDate, words: words.map(parseWord) };
+
+      // If the row exists but has 0 words, the pool was exhausted on that day.
+      // Delete the placeholder so we can regenerate with the (now-expanded) pool.
+      if (words.length === 0) {
+        await sql`DELETE FROM daily_vocabulary WHERE id = ${existing.id}`;
+        // fall through to generation below
+      } else {
+        return { date: targetDate, words: words.map(parseWord) };
+      }
     }
 
     // Only generate for today — never auto-generate historical dates
@@ -443,7 +444,7 @@ async function generateAndSaveDailyVocabulary(
   const savedWords: VocabularyWordData[] = [];
   try {
     for (const w of collected) {
-      // ON CONFLICT (word_key) is the DB-level duplicate guard
+      // ON CONFLICT (daily_vocabulary_id, word_key) is the DB-level duplicate guard (per-day, not global)
       const [row] = (await sql`
         INSERT INTO vocabulary_words (
           daily_vocabulary_id, word, word_key, part_of_speech, english_meaning,
@@ -460,7 +461,7 @@ async function generateAndSaveDailyVocabulary(
           ${JSON.stringify(w.synonyms)},
           ${w.entry.context}
         )
-        ON CONFLICT (word_key) DO NOTHING
+        ON CONFLICT (daily_vocabulary_id, word_key) DO NOTHING
         RETURNING *
       `) as VocabularyWord[];
 

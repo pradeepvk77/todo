@@ -163,7 +163,24 @@ function createPgSql(url: string) {
   return sql as any;
 }
 
-export const sql = isNeon ? neon(dbUrl) : createPgSql(dbUrl);
+import { recordQueryExecution, isPerfDebug } from "./perf";
+
+const rawSql = isNeon ? neon(dbUrl) : createPgSql(dbUrl);
+
+export const sql = ((strings: TemplateStringsArray, ...values: any[]) => {
+  if (isPerfDebug) {
+    const start = performance.now();
+    const result = (rawSql as any)(strings, ...values);
+    if (result && typeof result.then === "function") {
+      return result.then((res: any) => {
+        recordQueryExecution(performance.now() - start);
+        return res;
+      });
+    }
+    return result;
+  }
+  return (rawSql as any)(strings, ...values);
+}) as typeof rawSql;
 
 export async function withTransaction<T>(
   callback: (txSql: (strings: TemplateStringsArray, ...values: any[]) => Promise<any>) => Promise<T>
