@@ -127,6 +127,38 @@ async function checkAndPerformDailyReset(userId: string) {
 }
 
 /**
+ * Exported thin wrapper so page.tsx can run just the reset step synchronously
+ * (without the full maintenance chain) when needsDailyReset() returns true.
+ */
+export async function performDailyResetForUser(userId: string): Promise<void> {
+  await checkAndPerformDailyReset(userId);
+}
+
+
+/**
+ * Cheap check: does this user have ANY todo whose last_reset_date is not today?
+ * This is a fast single-row EXISTS query used by page.tsx to decide if the
+ * daily reset must run synchronously (before rendering) to avoid showing
+ * stale completed-task state on the first open of the day.
+ * Cost: ~1 ms on a warm connection (no full table scan, uses user_id index).
+ */
+export async function needsDailyReset(userId: string): Promise<boolean> {
+  const currentISTDate = getISTDateString();
+  try {
+    const [row] = await sql`
+      SELECT 1 FROM todos
+      WHERE user_id = ${userId}
+        AND (last_reset_date IS NULL OR last_reset_date = '' OR last_reset_date != ${currentISTDate})
+      LIMIT 1
+    `;
+    return Boolean(row);
+  } catch {
+    return false; // On error, fall through; after() will still run the reset
+  }
+}
+
+
+/**
  * Backwards compatibility migration: Ensures legacy rows missing day_section are assigned 'MORNING'
  */
 async function migrateLegacyTaskSections(userId: string) {

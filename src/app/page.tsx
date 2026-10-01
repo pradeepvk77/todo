@@ -6,6 +6,8 @@ import {
   getTaskPerformanceHistory,
   getTodayTaskComparison,
   runDailyMaintenance,
+  needsDailyReset,
+  performDailyResetForUser,
 } from "@/app/actions";
 import { getDailyVocabulary } from "@/app/actions/vocabulary";
 import { getSession } from "@/lib/session";
@@ -52,6 +54,25 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ u
   });
 
   const renderPage = async () => {
+    // ── Daily reset pre-check (cheap, ~1ms, first open of day only) ──────────
+    // If any todo for the current user hasn't been reset today (IST), run the
+    // reset synchronously NOW before fetching todos. This ensures the rendered
+    // tasks are already in post-reset state (completed=false) on first open.
+    //
+    // Idempotency under concurrent requests: both will see needsDailyReset=true
+    // and both will run the UPDATE, but the WHERE guard ensures only the first
+    // call changes rows — the second is a silent no-op. ✓
+    //
+    // The after() call still runs migrateLegacyTaskSections and
+    // detectNoActionOccurrences post-response (those are the heavy parts).
+    const resetNeeded = await trackStep(
+      "needsDailyReset",
+      () => needsDailyReset(currentUserId)
+    );
+    if (resetNeeded) {
+      await trackStep("preRenderDailyReset", () => performDailyResetForUser(currentUserId));
+    }
+
     // ── All independent queries run in a single Promise.all ───────────────────
     const [
       { todos: myTodos },
