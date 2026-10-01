@@ -1,5 +1,6 @@
 import { sql, initDb } from "./db";
 import { getISTDateString, getISTDayOfWeek, isTaskActiveOnDay } from "./time-utils";
+import { trackStep } from "./perf";
 
 function dateFromISTString(dateStr: string): Date {
   return new Date(`${dateStr}T12:00:00+05:30`);
@@ -14,6 +15,7 @@ function formatISTDate(date: Date): string {
  * and marks any un-acted task occurrences as 'no_action'.
  */
 export async function detectNoActionOccurrences(userId: string, daysBack = 7) {
+  return trackStep(`detectNoActionOccurrences(${userId})`, async () => {
   try {
     await initDb();
     const todayStr = getISTDateString();
@@ -133,4 +135,5 @@ export async function detectNoActionOccurrences(userId: string, daysBack = 7) {
     console.error("Error in detectNoActionOccurrences:", error);
     throw error;
   }
+  }); // end trackStep
 }

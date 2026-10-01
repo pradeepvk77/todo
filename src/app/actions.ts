@@ -18,6 +18,7 @@ import { revalidatePath } from "next/cache";
 import { getISTDateString, getISTDayOfWeek, isTaskActiveOnDay } from "@/lib/time-utils";
 import { PushSubscriptionData, sendPushToUser } from "@/lib/push";
 import { detectNoActionOccurrences } from "@/lib/no-action-detector";
+import { trackStep } from "@/lib/perf";
 
 function safeRevalidatePath(path: string) {
   try {
@@ -46,15 +47,17 @@ async function ensureDb() {
       dbInitPromise = null;
     });
   }
-  await dbInitPromise;
+  return trackStep("ensureDb", () => dbInitPromise!);
 }
 
 async function requireUser() {
-  const session = await getSession();
-  if (!session) {
-    throw new Error("Unauthorized");
-  }
-  return session.userId;
+  return trackStep("requireUser", async () => {
+    const session = await getSession();
+    if (!session) {
+      throw new Error("Unauthorized");
+    }
+    return session.userId;
+  });
 }
 
 async function verifyTaskOwnership(id: number, userId: string): Promise<boolean> {
@@ -113,33 +116,37 @@ async function notifyOtherUser(userId: string, action: "added" | "completed", ta
  * Daily Reset: Automatically unchecks completed tasks when IST date changes past midnight (12:00 AM IST)
  */
 async function checkAndPerformDailyReset(userId: string) {
-  const currentISTDate = getISTDateString();
-  try {
-    await sql`
-      UPDATE todos
-      SET completed = FALSE, last_reset_date = ${currentISTDate}
-      WHERE user_id = ${userId} 
-        AND (last_reset_date IS NULL OR last_reset_date = '' OR last_reset_date != ${currentISTDate})
-    `;
-  } catch (error) {
-    console.error("Failed to perform daily reset:", error);
-  }
+  return trackStep(`checkAndPerformDailyReset(${userId})`, async () => {
+    const currentISTDate = getISTDateString();
+    try {
+      await sql`
+        UPDATE todos
+        SET completed = FALSE, last_reset_date = ${currentISTDate}
+        WHERE user_id = ${userId} 
+          AND (last_reset_date IS NULL OR last_reset_date = '' OR last_reset_date != ${currentISTDate})
+      `;
+    } catch (error) {
+      console.error("Failed to perform daily reset:", error);
+    }
+  });
 }
 
 /**
  * Backwards compatibility migration: Ensures legacy rows missing day_section are assigned 'MORNING'
  */
 async function migrateLegacyTaskSections(userId: string) {
-  try {
-    await sql`
-      UPDATE todos
-      SET day_section = 'MORNING'
-      WHERE user_id = ${userId}
-        AND (day_section IS NULL OR day_section = '' OR day_section NOT IN ('MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'))
-    `;
-  } catch (error) {
-    console.error("Failed to migrate legacy task sections:", error);
-  }
+  return trackStep(`migrateLegacyTaskSections(${userId})`, async () => {
+    try {
+      await sql`
+        UPDATE todos
+        SET day_section = 'MORNING'
+        WHERE user_id = ${userId}
+          AND (day_section IS NULL OR day_section = '' OR day_section NOT IN ('MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'))
+      `;
+    } catch (error) {
+      console.error("Failed to migrate legacy task sections:", error);
+    }
+  });
 }
 
 /**
@@ -158,7 +165,7 @@ export async function getTodos(dayFilter: string = "today"): Promise<{ todos: To
     await detectNoActionOccurrences(userId);
 
     const todayDay = getISTDayOfWeek();
-    const rawUserRows = (await sql`
+    const rawUserRows = await trackStep("getTodos SELECT", () => sql`
       SELECT * FROM todos 
       WHERE user_id = ${userId} 
       ORDER BY sort_order ASC, created_at DESC
@@ -197,7 +204,7 @@ export async function getOtherUserTodos(): Promise<{ userId: string; todos: Todo
     await detectNoActionOccurrences(otherUserId);
 
     const todayDay = getISTDayOfWeek();
-    const rawOtherRows = (await sql`
+    const rawOtherRows = await trackStep("getOtherUserTodos SELECT", () => sql`
       SELECT * FROM todos 
       WHERE user_id = ${otherUserId} 
       ORDER BY sort_order ASC, created_at DESC
