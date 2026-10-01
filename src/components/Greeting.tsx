@@ -10,7 +10,13 @@ function getGreeting(hour: number) {
 
 const emptySubscribe = () => () => {};
 
-function getISTClientTimeData() {
+let cachedSnapshot: {
+  greeting: { text: string; emoji: string };
+  formattedDate: string;
+  hour: number;
+} | null = null;
+
+function getSnapshot() {
   const now = new Date();
   const istHour = Number(
     new Intl.DateTimeFormat("en-US", {
@@ -28,17 +34,28 @@ function getISTClientTimeData() {
     year: "numeric",
   }).format(now);
 
-  return {
+  if (
+    cachedSnapshot &&
+    cachedSnapshot.hour === istHour &&
+    cachedSnapshot.formattedDate === formattedDate
+  ) {
+    return cachedSnapshot;
+  }
+
+  cachedSnapshot = {
     greeting: getGreeting(istHour),
     formattedDate,
+    hour: istHour,
   };
+
+  return cachedSnapshot;
 }
 
 export function Greeting({ userName = "Valentine" }: { userName?: string }) {
   const timeData = useSyncExternalStore(
     emptySubscribe,
-    getISTClientTimeData,
-    getISTClientTimeData
+    getSnapshot,
+    getSnapshot
   );
 
   return (
